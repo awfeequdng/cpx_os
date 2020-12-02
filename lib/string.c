@@ -3,6 +3,53 @@
 
 #define ASM 1
 
+int strlen(const char *s)
+{
+	int n;
+	for (n = 0; *s != '\0'; s++)
+		n++;
+	return n;
+}
+
+int strnlen(const char *s, size_t size)
+{
+	int n;
+	for (n = 0; size > 0 && *s != '\0'; s++, size--)
+		n++;
+	return n;
+}
+
+char *strcpy(char *dst, const char *src)
+{
+	char *ret;
+
+	ret = dst;
+	while ((*dst++ = *src++) != '\0')
+	       /* do nothing */;
+	return ret;	
+}
+
+char *strcat(char *dst, const char *src)
+{
+	int len = strlen(dst);
+	strcpy(dst + len, src);
+	return dst;
+}
+
+char *strncpy(char *dst, const char *src, size_t size)
+{
+	size_t i;
+	char *ret;
+
+	ret = dst;
+	for (i = 0; i < size; i++) {
+		*dst++ = *src;
+		if (*src != '\0')
+			src++;
+	}
+	return ret;
+}
+
 
 #if ASM
 void * memmove(void *dst, const void *src, size_t n)

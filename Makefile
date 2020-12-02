@@ -39,6 +39,14 @@ CFLAGS := $(CFLAGS) -I$(TOP) -fno-builtin -m32 -O1
 CFLAGS += -static -std=gnu99
 CFLAGS += -fno-omit-frame-pointer -Wall -MD 
 CFLAGS += -g -ggdb -gstabs 
+# 加上-fno-stack-protector编译选项，不然程序会报'lib/printfmt.c:247: undefined reference to `__stack_chk_fail_local'错误
+# 如果没有该选项，编译器会判断vsnprintf这个函数可能会出现缓冲区溢出的风险，因此会调用编译器builtin函数__stack_chk_fail_local，
+# 但我们添加了-fno-builtin选项，因此会报找不到__stack_chk_fail_local这个函数的错误。
+# 正确的方法就是我们禁用堆栈保护功能
+# CFLAGS += -fno-stack-protector
+# Add -fno-stack-protector if the option exists.
+CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+
 
 # Common linker flags
 LDFLAGS := -m elf_i386

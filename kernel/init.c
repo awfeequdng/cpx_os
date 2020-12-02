@@ -12,6 +12,8 @@ void start_kernel(void)
 	putchar('l');
 	putchar('o');
 	putchar('\n');
+
+	printk("hello: using printk!\n");
 	
 	while(1);
 }

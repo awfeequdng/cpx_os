@@ -6,10 +6,12 @@ KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 KERNEL_SRC_FILES := kernel/entry.S \
 		kernel/init.c \
 		kernel/entry_pg_dir.c \
-		kernel/console.c
+		kernel/console.c \
+		kernel/printk.c
 
 
-KERNEL_LIB_SRC_FILES = lib/string.c
+KERNEL_LIB_SRC_FILES = lib/string.c \
+		lib/printfmt.c
 
 
 # 只替换%.c -> %.o, 没有匹配的保持不变
