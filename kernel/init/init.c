@@ -1,0 +1,66 @@
+#include <stdio.h>
+#include <string.h>
+
+#include <console.h>
+#include <kmonitor.h>
+
+void printk_test(void)
+{
+	printk("6828 decimal is %o octal!\n", 6828);
+
+	int x = -1, y = -3, z = -4;
+	printk("x %d, y %x, z %d\n", x, y, z);
+
+	unsigned int i = 0x00646c72;
+	printk("H%x Wo%s\n", 57616, &i);
+
+	printk("x=%d y=%d\n", 3);
+}
+
+void bss_test(char*start, int cnt)
+{
+
+	for (int i = 0; i < cnt; i++) {
+		printk("%x ",((unsigned*)start)[i]);
+	}
+	printk("\n");
+}
+
+void start_kernel(void)
+{
+    extern char edata[], end[];
+  	console_init();
+	int cnt = (unsigned)(end - edata);
+	printk("\nedata = 0x%x, end - edata= %d\n\n", edata, cnt);
+	end[0] = 'c';
+	end[1] = 'c';
+	end[2] = 'c';
+	end[3] = 'c';
+	bss_test(edata - 16, 32);
+	bss_test(end - 16, 32);
+	memset(edata, 0, end - edata);
+	bss_test(edata - 16, 32);
+	bss_test(end - 16, 32);
+
+
+	edata[20] = 'c';
+	printk("edata[20] = %c\n", edata[20]);
+//	console_init();
+	printk("edata = %x, end = %x\n", edata, end);
+	putchar('h');
+	putchar('e');
+	putchar('l');
+	putchar('l');
+	putchar('o');
+	putchar('\n');
+
+	printk("hello: using printk!\n");
+	
+	printk_test();
+	
+	pic_init();	// 初始化中断控制器
+
+
+	while(1)
+		monitor(NULL);
+}

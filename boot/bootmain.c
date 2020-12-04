@@ -27,7 +27,7 @@ void boot_main(void)
 		read_seg(ph->p_pa, ph->p_memsz, ph->p_offset);
 	}
 	
-	entry = (void(*)(void))(ELF_HDR->e_entry);
+	entry = (void(*)(void))(ELF_HDR->e_entry & 0xffffff);
 	entry();
 bad_elf:
 	// 这两条指令有什么用？

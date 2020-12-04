@@ -1,7 +1,7 @@
-#include <include/types.h>
-#include <include/error.h>
-#include <include/stdarg.h>
-#include <include/string.h>
+#include <types.h>
+#include <error.h>
+#include <stdarg.h>
+#include <string.h>
 
 static const char *error_string[MAX_ERROR] = {
 	[E_INVAL] = "invalid parameter",

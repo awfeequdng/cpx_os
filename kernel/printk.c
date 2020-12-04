@@ -1,11 +1,12 @@
-#include <include/types.h>
-#include <include/stdio.h>
-#include <include/stdarg.h>
+#include <types.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 static void putc(int c, int *cnt)
 {
 	putchar(c);
 	*cnt++;
+	*cnt = *cnt;
 }
 
 int vprintk(const char *fmt, va_list ap)

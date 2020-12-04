@@ -1,6 +1,6 @@
-#include <include/mmu.h>
-#include <include/memlayout.h>
-#include <include/types.h>
+#include <mmu.h>
+#include <memlayout.h>
+#include <types.h>
 
 extern pte_t entry_page_table[PT_ENTRIES];
 

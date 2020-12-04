@@ -1,5 +1,5 @@
-#include <include/memlayout.h>
-#include <include/mmu.h>
+#include <memlayout.h>
+#include <mmu.h>
 
 #define RELOC(x) ((x) - KERNEL_BASE)
 
@@ -13,8 +13,8 @@
 	.long MULTI_BOOT_HEADER_FLAGS
 	.long CHECKSUM
 
-	.global _start
-_start = RELOC(entry)
+# 	.global _start
+# _start = RELOC(entry)
 	
 	.global entry
 entry:

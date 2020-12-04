@@ -2,17 +2,32 @@
 #define __INCLUDE_MMU_H__
 
 #ifdef __ASSEMBLER__
-#define SEG_NULL	\
-	.word 0, 0;	\
-	.byte 0, 0, 0, 0
 
-#define SEG(type, base, limit)	\
-	.word (((limit) >> 12) & 0xffff), ((base) & 0xffff);	\
-	.byte (((base) >> 16) & 0xff), ((0x90 | type)), \
-		(0xc0 | (((limit) >> 28) & 0xf)), (((base) >> 24) & 0xff)
+#define SEG_NULL                                                \
+    .word 0, 0;                                                 \
+    .byte 0, 0, 0, 0
+
+#define SEG_ASM(type,base,lim)                                  \
+    .word (((lim) >> 12) & 0xffff), ((base) & 0xffff);          \
+    .byte (((base) >> 16) & 0xff), (0x90 | (type)),             \
+        (0xC0 | (((lim) >> 28) & 0xf)), (((base) >> 24) & 0xff)
 
 #else	// not __ASSEMBLER__
-
+struct SegDesc {
+	unsigned sd_lim_15_0 : 16;	// low bits of segment limit
+	unsigned sd_base_15_0 : 16;	// low bits of segment base address
+	unsigned sd_base_23_16 : 8;	// middle bits of segment base address
+	unsigned sd_type : 4; 		// segment type (see STS_ constants)
+	unsigned sd_s : 1;			// 0 = system, 1 = application
+	unsigned sd_dpl : 2;		// descriptor privilege level
+	unsigned sd_p : 1;			// present
+	unsigned sd_lim_19_16 : 4;	// high bits of segment limit
+	unsigned sd_avl : 1;		// unused
+	unsigned sd_res : 1;		// reserved
+	unsigned sd_db : 1;			// 0 = 16-bit segment, 1 = 32-bit segment
+	unsigned sd_g : 1;			// granularity: limit scaled by 4Kwhen set
+	unsigned sd_base_31_24 : 8;	// high bits of segment base address
+};
 #endif // __ASSEMBER__
 
 #define STA_X	0x8	// 可执行
@@ -56,6 +71,9 @@
 #define CR0_NW		0x20000000	// Not Writethrough
 #define CR0_CD		0x40000000	// Cache Disable
 #define CR0_PG		0x80000000	// Paging
+
+
+
 
 
 #endif

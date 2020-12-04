@@ -3,6 +3,10 @@ OBJ_DIR := obj
 TOOLS_DIR := tools
 TOP = .
 OBJ_DIRS :=
+KERNEL_INC = $(TOP) \
+			 kernel/ \
+			 lib/ \
+			 include/
 
 ifndef COMPILE_PREFIX
 COMPILE_PREFIX := $(shell if objdump -i 2>&1 | grep 'elf32-i386' > /dev/null 2>&1; \
@@ -35,10 +39,12 @@ OBJDUMP = $(COMPILE_PREFIX)objdump
 NM	= $(COMPILE_PREFIX)nm
 
 # 编译选项详情见：https://zhuanlan.zhihu.com/p/316007378
-CFLAGS := $(CFLAGS) -I$(TOP) -fno-builtin -m32 -O1
+CFLAGS := $(CFLAGS) -fno-builtin -m32 -O0
 CFLAGS += -static -std=gnu99
 CFLAGS += -fno-omit-frame-pointer -Wall -MD 
-CFLAGS += -g -ggdb -gstabs 
+# 不需要位置无关代码
+CFLAGS += -fno-pie -fno-pic
+CFLAGS += -g -ggdb -gstabs -gstabs+ 
 # 加上-fno-stack-protector编译选项，不然程序会报'lib/printfmt.c:247: undefined reference to `__stack_chk_fail_local'错误
 # 如果没有该选项，编译器会判断vsnprintf这个函数可能会出现缓冲区溢出的风险，因此会调用编译器builtin函数__stack_chk_fail_local，
 # 但我们添加了-fno-builtin选项，因此会报找不到__stack_chk_fail_local这个函数的错误。
@@ -71,9 +77,9 @@ $(IMAGES): $(KERNEL) $(BOOT)
 	$(V)dd if=$(KERNEL) of=$(IMAGES_TMP) seek=1 conv=notrunc 2>/dev/null
 	$(V)mv $(IMAGES_TMP)  $(IMAGES)
 
-
 include boot/Makefile.inc
 include kernel/Makefile.inc
+
 
 GDB_PORT = $(shell expr `id -u` % 5000 + 25000)
 
@@ -99,7 +105,7 @@ qemu-nox: $(IMAGES) pre-qemu
 	@echo "***"
 	@echo "*** Use Ctrl-a x to exit qemu"
 	@echo "***"
-	$(QEMU) -nographic $(QEMUOPTS)
+	$(QEMU) -nographic  $(QEMUOPTS)
 
 qemu-gdb: $(IMAGES) pre-qemu
 	@echo "***"
@@ -115,6 +121,11 @@ qemu-nox-gdb: $(IMAGES) pre-qemu
 	# 通过qemu的 -S -s参数让qemu启动内核后不执行，然后通过gdb进行调试
 	$(QEMU) -nographic $(QEMUOPTS) -S
 
+TERMINAL := gnome-terminal
+debug: $(IMAGES) pre-qemu
+	$(V)$(QEMU) -S -s $(QEMUOPTS) &
+	$(V)sleep 2
+	$(V)$(TERMINAL) -e "gdb -n -x .gdbinit"
 
 print-qemu:
 	@echo $(QEMU)

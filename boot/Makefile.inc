@@ -17,6 +17,7 @@ $(OBJ_DIR)/boot/sign: $(TOOLS_DIR)/sign.c
 
 $(OBJ_DIR)/boot/boot: $(BOOT_OBJS) $(OBJ_DIR)/boot/sign
 	echo + ld boot/boot
+	# 通过如下的链接方式.data数据段是没有被链接进来的
 	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7c00 -o $@.out $(BOOT_OBJS)
 	$(OBJDUMP) -S $@.out >$@.asm
 	$(OBJCOPY) -S -O binary -j .text $@.out $@

@@ -5,6 +5,8 @@
 #define NULL ((void*)0)
 #endif
 
+typedef int bool;
+
 enum { false, true };
 
 typedef signed char int8_t;
@@ -47,7 +49,7 @@ typedef uint32_t pde_t;
 
 #define ROUNDDOWN(a, n)	\
 ({			\
- 	uint32_t __a = (uint32)(a);	\
+ 	uint32_t __a = (uint32_t)(a);	\
 	(typeof(a)) (__a - __a % (n));	\
 })
 
