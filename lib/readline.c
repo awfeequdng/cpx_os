@@ -34,11 +34,11 @@ char *readline(const char *prompt) {
         }
         else if (c >= ' ' && i < BUFSIZE - 1) {
             putchar(c);
-            buf[i ++] = c;
+            buf[i++] = c;
         }
         else if (c == '\b' && i > 0) {
             putchar(c);
-            i --;
+            i--;
         }
         else if (c == '\n' || c == '\r') {
             putchar(c);

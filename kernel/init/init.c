@@ -29,23 +29,18 @@ void bss_test(char*start, int cnt)
 void start_kernel(void)
 {
     extern char edata[], end[];
+	// bss段清零
+	memset(edata, 0, end - edata);
+
+	// 终端初始化，显示和键盘输入初始化
   	console_init();
+	
 	int cnt = (unsigned)(end - edata);
 	printk("\nedata = 0x%x, end - edata= %d\n\n", edata, cnt);
-	end[0] = 'c';
-	end[1] = 'c';
-	end[2] = 'c';
-	end[3] = 'c';
-	bss_test(edata - 16, 32);
-	bss_test(end - 16, 32);
-	memset(edata, 0, end - edata);
+	
 	bss_test(edata - 16, 32);
 	bss_test(end - 16, 32);
 
-
-	edata[20] = 'c';
-	printk("edata[20] = %c\n", edata[20]);
-//	console_init();
 	printk("edata = %x, end = %x\n", edata, end);
 	putchar('h');
 	putchar('e');

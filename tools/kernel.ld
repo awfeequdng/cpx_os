@@ -16,12 +16,12 @@ SECTIONS
 	/* AT(...) 设置段的加载地址（也就是实际的物理地址），*/
 	/* 这个地址将告诉bootloader，然后将内核加载到这个物理内存处 */
 	.text : AT(0x100000) {
-		*(.text .text.* .stub .gnu.linkonce.t.*)
+		*(.text .text.*)
 	}
 	PROVIDE(etext = .);
 
 	.rodata : {
-		*(.rodata .rodata.* .gnu.linkonce.r.*)
+		*(.rodata .rodata.*)
 	}
 
 	/* include debugging information in kernel memory */
