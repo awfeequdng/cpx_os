@@ -11,8 +11,6 @@ struct Command {
     int(*func)(int argc, char **argv, struct TrapFrame *tf);
 };
 
-#define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(arr[0]))
-
 static struct Command commands[] = {
     {"help", "Display this list of commands.", monitor_help},
     {"kernel_info", "Display information about the kernel.", monitor_kernel_info},

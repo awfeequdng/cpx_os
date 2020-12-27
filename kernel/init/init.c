@@ -4,6 +4,7 @@
 #include <console.h>
 #include <kmonitor.h>
 #include <assert.h>
+#include <x86.h>
 
 void printk_test(void)
 {
@@ -56,8 +57,13 @@ void start_kernel(void)
 	
 	pic_init();	// 初始化中断控制器
 
+	// 初始化中断描述符表
+	idt_init();
 
-	panic("before monitor\n");
+	// 开启总中断
+	sti();
+
+	// panic("before monitor\n");
 
 	while(1)
 		monitor(NULL);

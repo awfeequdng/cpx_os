@@ -228,9 +228,12 @@ static void console_intr(int (*proc)(void)) {
     int c;
     while ((c = (*proc)()) != -1) {
         if (c != 0) {
-            cons.buf[cons.wpos ++] = c;
-            if (cons.wpos == CONSBUFSIZE) {
+            cons.buf[cons.wpos] = c;
+            uint32_t wpos = cons.wpos + 1;
+            if (wpos == CONSBUFSIZE) {
                 cons.wpos = 0;
+            } else {
+                cons.wpos = wpos;
             }
         }
     }
@@ -439,8 +442,8 @@ int console_getc(void) {
     // poll for any pending input characters,
     // so that this function works even when interrupts are disabled
     // (e.g., when called from the kernel monitor).
-    serial_intr();
-    kbd_intr();
+    // serial_intr();
+    // kbd_intr();
 
     // grab the next character from the input buffer.
     if (cons.rpos != cons.wpos) {

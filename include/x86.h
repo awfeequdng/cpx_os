@@ -3,6 +3,14 @@
 
 #include <include/types.h>
 
+
+/* Pseudo-descriptors used for LGDT, LLDT(not used) and LIDT instructions. */
+struct PseudoDescriptor {
+    uint16_t pd_lim;        // Limit
+    uintptr_t pd_base;      // Base address
+} __attribute__ ((packed));
+
+
 static inline void breakpoint(void)
 {
 	asm volatile("int3");
@@ -115,5 +123,9 @@ static inline void sti(void) {
 static inline void cli(void) {
     asm volatile ("cli" ::: "memory");
 }
+
+// static inline void lidt_pd(struct PseudoDescriptor *pd) {
+// 	asm volatile ("lidt (%0)" :: "r" (pd) : "memory");
+// }
 
 #endif // __INCLUDE_X86_H__

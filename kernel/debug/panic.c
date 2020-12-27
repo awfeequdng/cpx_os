@@ -9,8 +9,7 @@ static bool is_panic = 0;
  * __panic - __panic is called on unresolvable fatal errors. it prints
  * "panic: 'message'", and then enters the kernel monitor.
  * */
-void
-__panic(const char *file, int line, const char *fmt, ...) {
+void __panic(const char *file, int line, const char *fmt, ...) {
     if (is_panic) {
         goto panic_dead;
     }
@@ -32,8 +31,7 @@ panic_dead:
 }
 
 /* __warn - like panic, but don't */
-void
-__warn(const char *file, int line, const char *fmt, ...) {
+void __warn(const char *file, int line, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     printk("kernel warning at %s:%d:\n    ", file, line);
