@@ -124,8 +124,8 @@ static inline void cli(void) {
     asm volatile ("cli" ::: "memory");
 }
 
-// static inline void lidt_pd(struct PseudoDescriptor *pd) {
-// 	asm volatile ("lidt (%0)" :: "r" (pd) : "memory");
-// }
+static inline void ltr(uint16_t sel) {
+    asm volatile ("ltr %0" :: "r" (sel) : "memory");
+}
 
 #endif // __INCLUDE_X86_H__

@@ -23,7 +23,8 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/driver/pic_irq.c \
 		kernel/lib/stdio.c \
 		kernel/debug/panic.c \
-		kernel/driver/clock.c
+		kernel/driver/clock.c \
+		kernel/mm/pmm.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \

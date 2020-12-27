@@ -7,6 +7,7 @@
 #include <x86.h>
 #include <clock.h>
 #include <pic_irq.h>
+#include <pmm.h>
 
 void printk_test(void)
 {
@@ -63,10 +64,16 @@ void start_kernel(void)
 	
 	pic_init();	// 初始化中断控制器
 
-	// 初始化中断描述符表
+	// 重新初始化分段，使用pmm对段重新进行初始化，在初始化之前已经开启了分页
+	// 也就是说，我们通过lgdt加载的是虚拟地址，而不是物理地址
+	// 为什么加载的是虚拟地址程序也不跑飞？？
+	pmm_init();
+
+	// 初始化中断描述符表，此处已经开启了分页，加载的中断描述符地址应该是虚拟地址，
+	// 不是物理地址，所以应该找不到中断描述符地址才对？此处为什么没有错误？
 	idt_init();
 
-	clock_init();
+	// clock_init();
 
 	// 开启总中断
 	sti();

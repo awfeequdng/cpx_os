@@ -13,6 +13,8 @@
         (0xC0 | (((lim) >> 28) & 0xf)), (((base) >> 24) & 0xff)
 
 #else	// not __ASSEMBLER__
+#include <types.h>
+
 struct SegDesc {
 	unsigned sd_lim_15_0 : 16;	// low bits of segment limit
 	unsigned sd_base_15_0 : 16;	// low bits of segment base address
@@ -41,6 +43,47 @@ struct GateDescriptor {
 	unsigned gd_off_31_16 : 16;
 };
 
+
+/* task state segment format (as described by the Pentium architecture book) */
+struct TaskState {
+    uint32_t ts_link;       // old ts selector
+    uintptr_t ts_esp0;      // stack pointers and segment selectors
+    uint16_t ts_ss0;        // after an increase in privilege level
+    uint16_t ts_padding1;
+    uintptr_t ts_esp1;
+    uint16_t ts_ss1;
+    uint16_t ts_padding2;
+    uintptr_t ts_esp2;
+    uint16_t ts_ss2;
+    uint16_t ts_padding3;
+    uintptr_t ts_cr3;       // page directory base
+    uintptr_t ts_eip;       // saved state from last task switch
+    uint32_t ts_eflags;
+    uint32_t ts_eax;        // more saved state (registers)
+    uint32_t ts_ecx;
+    uint32_t ts_edx;
+    uint32_t ts_ebx;
+    uintptr_t ts_esp;
+    uintptr_t ts_ebp;
+    uint32_t ts_esi;
+    uint32_t ts_edi;
+    uint16_t ts_es;         // even more saved state (segment selectors)
+    uint16_t ts_padding4;
+    uint16_t ts_cs;
+    uint16_t ts_padding5;
+    uint16_t ts_ss;
+    uint16_t ts_padding6;
+    uint16_t ts_ds;
+    uint16_t ts_padding7;
+    uint16_t ts_fs;
+    uint16_t ts_padding8;
+    uint16_t ts_gs;
+    uint16_t ts_padding9;
+    uint16_t ts_ldt;
+    uint16_t ts_padding10;
+    uint16_t ts_t;          // trap on task switch
+    uint16_t ts_iomb;       // i/o map base address
+} __attribute__((packed));
 
 /* *
  * Set up a normal interrupt/trap gate descriptor
@@ -76,6 +119,24 @@ struct GateDescriptor {
         (gate).gd_off_31_16 = (uint32_t)(off) >> 16;        \
     }
 
+#define SEG_NULL                                            \
+    (struct SegDesc) {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+
+#define SEG(type, base, lim, dpl)                           \
+    (struct SegDesc) {                                      \
+        ((lim) >> 12) & 0xffff, (base) & 0xffff,            \
+        ((base) >> 16) & 0xff, type, 1, dpl, 1,             \
+        (unsigned)(lim) >> 28, 0, 0, 1, 1,                  \
+        (unsigned) (base) >> 24                             \
+    }
+
+#define SEGTSS(type, base, lim, dpl)                        \
+    (struct SegDesc) {                                      \
+        (lim) & 0xffff, (base) & 0xffff,                    \
+        ((base) >> 16) & 0xff, type, 0, dpl, 1,             \
+        (unsigned) (lim) >> 16, 0, 0, 1, 0,                 \
+        (unsigned) (base) >> 24                             \
+    }
 
 #endif // __ASSEMBER__
 
@@ -158,7 +219,6 @@ struct GateDescriptor {
 #define CR0_NW		0x20000000	// Not Writethrough
 #define CR0_CD		0x40000000	// Cache Disable
 #define CR0_PG		0x80000000	// Paging
-
 
 
 
