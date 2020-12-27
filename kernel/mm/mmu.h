@@ -140,7 +140,6 @@ struct TaskState {
 
 #endif // __ASSEMBER__
 
-
 // Eflags register
 #define FL_CF           0x00000001  // Carry Flag
 #define FL_PF           0x00000004  // Parity Flag
@@ -189,11 +188,38 @@ struct TaskState {
 
 
 // 分页相关的宏设置
-#define PD_ENTRIES      1024    // 页目录中页目录项的数目
-#define PT_ENTRIES      1024    // 页表中页表项的数目
-#define PG_SIZE         4096    // 分页的大小
-#define PG_SHIFT        12      // 页地址偏移
-#define PDX_SHIFT	22
+// #define PD_ENTRIES      1024    // 页目录中页目录项的数目
+// #define PT_ENTRIES      1024    // 页表中页表项的数目
+#define PDX_SHIFT		22
+#define PTX_SHIFT		12
+
+#define PDE_ENTRIES		1024
+#define PTE_ENTRIES		1024
+
+#define PAGE_SIZE		4096
+#define PAGE_SHIFT		12
+
+// 一个page table可以映射的内存大小（4M）
+#define PT_SIZE			(PAGE_SIZE * PTE_ENTRIES)
+#define PT_SHIFT		22
+
+// page directory 的索引
+#define PDX(vaddr)	((((uintptr_t)(vaddr)) >> PDX_SHIFT) & 0x3ff)
+
+// page table 索引
+#define PTX(vaddr)	((((uintptr_t)(vaddr)) >> PTX_SHIFT) & 0x3ff)
+
+// 物理地址对应的页框号
+#define PPN(paddr)	(((uintptr_t)(paddr)) >> PTX_SHIFT)
+
+// 虚拟地址在页内的偏移
+#define PAGE_OFF(vaddr)	(((uintptr_t)(vaddr)) & 0xfff)
+
+// 根据页目录项、页表项以及页内偏移地址构造出虚拟地址
+#define PAGE_ADDR(d, t, o) ((uintptr_t)((d) << PDX_SHIFT | (t) << PTX_SHIFT | (o)))
+
+#define PTE_ADDR(pte) ((uintptr_t)(pte) & ~0xfff)
+#define PDE_ADDR(pde) PTE_ADDR(pde)
 
 // 页表/页目录项的标志位
 #define PTE_P		0x001	// Present

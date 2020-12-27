@@ -47,7 +47,7 @@ spin:
 
 	.section .data
 	# .align 是按字节对齐，如果要按2的指数方对齐，需要使用 .p2align
-	.p2align PG_SHIFT
+	.p2align PAGE_SHIFT
 	.global boot_stack
 boot_stack:
 	.space K_STACK_SIZE

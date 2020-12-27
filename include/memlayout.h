@@ -6,7 +6,7 @@
 #define KERNEL_BASE	0xc0000000
 
 #define K_STACK_TOP  KERNEL_BASE
-#define K_STACK_SIZE (8 * PG_SIZE)
+#define K_STACK_SIZE (8 * PAGE_SIZE)
 
 // 内核代码段
 #define SEG_KTEXT	1
@@ -67,7 +67,7 @@ struct Page {
 #define PageReserved(page)          test_bit(PG_reserved, &((page)->flags))
 
 #define le2page(le, member)         \
-    to_struct((le), struct Page, member)
+    container_of((le), struct Page, member)
 
 typedef struct {
     list_entry_t free_list;

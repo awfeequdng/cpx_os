@@ -2,16 +2,16 @@
 #include <memlayout.h>
 #include <types.h>
 
-extern pte_t entry_page_table[PT_ENTRIES];
+extern pte_t entry_page_table[PTE_ENTRIES];
 
-__attribute__((__aligned__(PG_SIZE)))
-pde_t entry_page_dir[PD_ENTRIES] = {
+__attribute__((__aligned__(PAGE_SIZE)))
+pde_t entry_page_dir[PDE_ENTRIES] = {
 	[0] = ((uintptr_t)entry_page_table - KERNEL_BASE) + PTE_P,
 	[KERNEL_BASE >> PDX_SHIFT] = ((uintptr_t)entry_page_table - KERNEL_BASE) + PTE_P + PTE_W
 };
 
-__attribute__((__aligned__(PG_SIZE)))
-pte_t entry_page_table[PT_ENTRIES] = {
+__attribute__((__aligned__(PAGE_SIZE)))
+pte_t entry_page_table[PTE_ENTRIES] = {
 	0x000000 | PTE_P | PTE_W,
 	0x001000 | PTE_P | PTE_W,
 	0x002000 | PTE_P | PTE_W,
