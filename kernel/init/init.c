@@ -56,6 +56,8 @@ void start_kernel(void)
 	pic_init();	// 初始化中断控制器
 
 
+	
+
 	while(1)
 		monitor(NULL);
 }
