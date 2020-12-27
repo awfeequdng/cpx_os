@@ -35,4 +35,45 @@
 #define USER_CS		((GD_UTEXT) | DPL_USER)
 #define USER_DS		((GD_UDATA) | DPL_USER)
 
-#endif
+#ifndef __ASSEMBLER__
+
+#include <atomic.h>
+#include <list.h>
+
+#define E820_MAX            20      // number of entries in E820MAP
+#define E820_ARM            1       // address range memory
+#define E820_ARR            2       // address range reserved
+
+struct E820Map {
+    int nr_map;
+    struct {
+        uint64_t addr;
+        uint64_t size;
+        uint32_t type;
+    } __attribute__((packed)) map[E820_MAX];
+};
+
+
+struct Page {
+    atomic_t ref;                   // page frame's reference counter
+    uint32_t flags;                 // array of flags that describe the status of the page frame
+    list_entry_t page_link;         // free list link
+};
+
+/* Flags describing the status of a page frame */
+#define PG_reserved                 0       // the page descriptor is reserved for kernel or unusable
+#define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
+#define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
+#define PageReserved(page)          test_bit(PG_reserved, &((page)->flags))
+
+#define le2page(le, member)         \
+    to_struct((le), struct Page, member)
+
+typedef struct {
+    list_entry_t free_list;
+    unsigned int nr_free;
+} free_area_t;
+
+#endif // __ASSEMBLER__
+
+#endif // __INCLUDE_MEMLAYOUT_H__
