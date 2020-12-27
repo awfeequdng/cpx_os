@@ -5,6 +5,8 @@
 #include <kmonitor.h>
 #include <assert.h>
 #include <x86.h>
+#include <clock.h>
+#include <pic_irq.h>
 
 void printk_test(void)
 {
@@ -35,6 +37,10 @@ void start_kernel(void)
 	memset(edata, 0, end - edata);
 
 	// 终端初始化，显示和键盘输入初始化
+	// 在这个函数中调用了pic_enable将serial中断使能
+	// 本应该是不生效的，只是pic_enable用一个局部变量记录下了这个中断掩码，
+	// 然后最后开启pic中断控制器时将这个记录下来的掩码设置到控制器了，
+	// 这才使得seriel中断能够生效
   	console_init();
 	
 	int cnt = (unsigned)(end - edata);
@@ -59,6 +65,8 @@ void start_kernel(void)
 
 	// 初始化中断描述符表
 	idt_init();
+
+	clock_init();
 
 	// 开启总中断
 	sti();

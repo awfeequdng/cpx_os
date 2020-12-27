@@ -5,6 +5,14 @@
 #include <x86.h>
 #include <console.h>
 #include <assert.h>
+#include <clock.h>
+
+// 100个tick就是1s
+#define TICK_HZ		100
+
+static void print_hz() {
+	printk("%d ticks is 1 second\n", TICK_HZ);
+}
 
 static struct GateDescriptor idt[256] = {{0}};
 
@@ -102,10 +110,16 @@ void print_trap_frame(struct TrapFrame *tf) {
 
 static void trap_dispatch(struct TrapFrame *tf) {
 	char c;
-
+	size_t tick;
 	switch (tf->tf_trap_no) {
 		case IRQ_OFFSET + IRQ_TIMER:
-			printk("fall in irq timer\n");
+			// printk("fall in irq timer\n");
+			tick = get_ticks();
+			tick++;
+			set_ticks(tick);
+			if (tick % TICK_HZ == 0) {
+				print_hz();
+			}
 			break;
 		case IRQ_OFFSET + IRQ_COM1:
 			// c = console_getc();

@@ -9,4 +9,6 @@ void console_init(void);
 int console_getc(void);
 void console_putc(int);
 
+void serial_intr(void);
+
 #endif
