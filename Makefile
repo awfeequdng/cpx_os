@@ -43,7 +43,8 @@ CFLAGS := $(CFLAGS) -fno-builtin -m32 -O0
 CFLAGS += -static -std=gnu99
 CFLAGS += -fno-omit-frame-pointer -Wall -MD 
 # 不需要位置无关代码
-CFLAGS += -fno-pie -fno-pic
+# CFLAGS += -fno-pie -fno-pic
+CFLAGS += -fno-pie 
 CFLAGS += -g -ggdb -gstabs -gstabs+ 
 # 加上-fno-stack-protector编译选项，不然程序会报'lib/printfmt.c:247: undefined reference to `__stack_chk_fail_local'错误
 # 如果没有该选项，编译器会判断vsnprintf这个函数可能会出现缓冲区溢出的风险，因此会调用编译器builtin函数__stack_chk_fail_local，

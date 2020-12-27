@@ -92,6 +92,7 @@ void monitor(struct TrapFrame *tf)
 
 	while(1) {
 		buf = readline("K> ");
+		printk("\n");
 		if (buf != NULL)
 			if (run_cmd(buf, tf) < 0)
 				break;
