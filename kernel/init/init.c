@@ -3,6 +3,7 @@
 
 #include <console.h>
 #include <kmonitor.h>
+#include <assert.h>
 
 void printk_test(void)
 {
@@ -56,7 +57,7 @@ void start_kernel(void)
 	pic_init();	// 初始化中断控制器
 
 
-	
+	panic("before monitor\n");
 
 	while(1)
 		monitor(NULL);

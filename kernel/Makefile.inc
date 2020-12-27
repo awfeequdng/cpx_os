@@ -21,7 +21,8 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/debug/kmonitor.c \
 		kernel/debug/kdebug.c \
 		kernel/driver/pic_irq.c \
-		kernel/lib/stdio.c
+		kernel/lib/stdio.c \
+		kernel/debug/panic.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \

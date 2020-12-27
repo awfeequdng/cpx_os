@@ -108,4 +108,12 @@ static inline void lgdt(void *p)
 	asm volatile("lgdt (%0)" :: "r" (p));
 }
 
+static inline void sti(void) {
+    asm volatile ("sti");
+}
+
+static inline void cli(void) {
+    asm volatile ("cli" ::: "memory");
+}
+
 #endif // __INCLUDE_X86_H__
