@@ -15,5 +15,6 @@ void monitor(struct TrapFrame *tf);
 
 int monitor_help(int argc, char **argv, struct TrapFrame *tf);
 int monitor_kernel_info(int argc, char **argv, struct TrapFrame *tf);
+int monitor_backtrace(int argc, char **argv, struct TrapFrame *tf);
 
 #endif // __KERNEL_MONITOR_H__

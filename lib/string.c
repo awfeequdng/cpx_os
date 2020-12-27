@@ -169,3 +169,22 @@ char *strchr(const char *s, char c)
 	return 0;
 }
 
+
+/* *
+ * strfind - locates first occurrence of character in string
+ * @s:      the input string
+ * @c:      character to be located
+ *
+ * The strfind() function is like strchr() except that if @c is
+ * not found in @s, then it returns a pointer to the null byte at the
+ * end of @s, rather than 'NULL'.
+ * */
+char *strfind(const char *s, char c) {
+    while (*s != '\0') {
+        if (*s == c) {
+            break;
+        }
+        s ++;
+    }
+    return (char *)s;
+}

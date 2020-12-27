@@ -19,6 +19,7 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/driver/console.c \
 		kernel/printk.c \
 		kernel/debug/kmonitor.c \
+		kernel/debug/kdebug.c \
 		kernel/driver/pic_irq.c \
 		kernel/lib/stdio.c
 

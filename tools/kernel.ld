@@ -28,7 +28,7 @@ SECTIONS
 	.stab : {
 		PROVIDE(__STAB_BEGIN__ = .);
 		*(.stab);
-		PROVIDE(__STAB_END = .);
+		PROVIDE(__STAB_END__ = .);
 		BYTE(0) /* force the linker to allocate space for this section: WHY ???*/
 	}
 

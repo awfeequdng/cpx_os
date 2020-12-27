@@ -1,4 +1,6 @@
 #include <kmonitor.h>
+#include <kdebug.h>
+
 #include <stdio.h>
 #include <string.h>
 
@@ -14,6 +16,7 @@ struct Command {
 static struct Command commands[] = {
     {"help", "Display this list of commands.", monitor_help},
     {"kernel_info", "Display information about the kernel.", monitor_kernel_info},
+	// {"backtrace", "Print backtrace of stack frame.", monitor_backtrace},
 };
 
 #define MAXARGS         16
@@ -79,20 +82,17 @@ int monitor_help(int argc, char **argv, struct TrapFrame *tf) {
     return 0;
 }
 
-
-void print_kerninfo(void) {
-    extern char etext[], edata[], end[], start_kernel[];
-    printk("Special kernel symbols:\n");
-    printk("  entry  0x%08x (phys)\n", start_kernel);
-    printk("  etext  0x%08x (phys)\n", etext);
-    printk("  edata  0x%08x (phys)\n", edata);
-    printk("  end    0x%08x (phys)\n", end);
-    printk("Kernel executable memory footprint: %dKB\n", (end - start_kernel + 1023)/1024);
-}
-
 int monitor_kernel_info(int argc, char **argv, struct TrapFrame *tf) {
     print_kerninfo();
     return 0;
 }
 
+/* *
+ * mon_backtrace - call print_stackframe in kern/debug/kdebug.c to
+ * print a backtrace of the stack.
+ * */
+int monitor_backtrace(int argc, char **argv, struct TrapFrame *tf) {
+    print_stackframe();
+    return 0;
+}
 
