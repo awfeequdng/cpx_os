@@ -232,6 +232,7 @@ struct TaskState {
 #define PTE_PS		0x080	// Page Size
 #define PTE_G		0x100	// Global
 
+#define PTE_USER	(PTE_U | PTE_W | PTE_P)
 
 // Control Register flags
 #define CR0_PE		0x00000001	// Protection Enable

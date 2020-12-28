@@ -128,4 +128,34 @@ static inline void ltr(uint16_t sel) {
     asm volatile ("ltr %0" :: "r" (sel) : "memory");
 }
 
+static inline uint32_t read_eflags(void) {
+	uint32_t eflags;
+	asm volatile("pushfl; popl %0" : "=r" (eflags));
+	return eflags;
+}
+
+static inline void write_eflags(uint32_t eflags) {
+	asm volatile("pushl %0; popfl" :: "r" (eflags));
+}
+
+static inline void lcr0(uintptr_t cr0) {
+	asm volatile("mov %0, %%cr0" :: "r" (cr0) : "memory");
+}
+
+static inline void lcr3(uintptr_t cr3) {
+	asm volatile("mov %0, %%cr3" :: "r" (cr3) : "memory");
+}
+
+static inline uintptr_t rcr0(void) {
+	uintptr_t cr0;
+	asm volatile("mov %%cr0, %0" : "=r" (cr0) :: "memory");
+	return cr0;
+}
+
+static inline uintptr_t rcr3(void) {
+	uintptr_t cr3;
+	asm volatile("mov %%cr3, %0" : "=r" (cr3) :: "memory");
+	return cr3;
+}
+
 #endif // __INCLUDE_X86_H__

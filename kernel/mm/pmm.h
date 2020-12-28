@@ -4,9 +4,10 @@
 #include <atomic.h>
 #include <list.h>
 #include <memlayout.h>
+#include <assert.h>
 
 struct PmmManager {
-    const char *name;
+    char *name;
     void (*init)(void);
 
     void (*init_memmap)(struct Page *base, size_t n);
@@ -37,11 +38,72 @@ void tlb_invalidate(pde_t *pgdir, uintptr_t vaddr);
 
 void print_pgdir(void);
 
+#define PADDR(kva) ({                                                   \
+            uintptr_t __kva = (uintptr_t)(kva);                         \
+            if (__kva < KERNEL_BASE) {                                  \
+                panic("PADDR called with invalid kva %08lx", __kva);    \
+            }                                                           \
+            __kva - KERNEL_BASE;                                        \
+    })
+
 // 通过物理地址，返回内核虚拟地址
-// #define KVADDR(pa) ({               \
-//             uintptr_t __pa = (pa);   \
-//             size_t __ppn = PPN(__pa);
-//             })
+#define KVADDR(pa) ({                                               \
+            uintptr_t __pa = (pa);                                  \
+            size_t __ppn = PPN(__pa);                               \
+            const size_t __npage = get_npage();                     \
+            if (__ppn >= __npage) {                                 \
+                panic("KADDR called with invalid pa %08lx", __pa);  \
+            }                                                       \
+            if ((__pa + KERNEL_BASE >= KERNEL_TOP) ||                 \
+                (__pa + KERNEL_BASE < KERNEL_BASE)) {                 \
+                panic("KADDR called with invalid pa %08lx", __pa);  \
+            }                                                       \
+            (void *) (__pa + KERNEL_BASE);                          \
+            })
+
+const struct Page *get_pages_base(void);
+const size_t get_npage(void);
+
+// 根据page获取物理页索引号
+static inline ppn_t page2ppn(struct Page *page) {
+    return page - get_pages_base();
+}
+
+// 根据page获取到page管理的物理其实地址
+static inline uintptr_t page2pa(struct Page *page) {
+    return page2ppn(page) << PAGE_SHIFT;
+}
+
+// 根据物理地址获取对应的page
+static inline struct Page *pa2page(uintptr_t pa) {
+    if (PPN(pa) >= get_npage()) {
+        panic("pa2page called with invalid pa");
+    }
+    return &(get_pages_base()[PPN(pa)]);
+}
+
+// 根据page获取对应的内核虚拟地址
+static inline void *page2kva(struct Page *page) {
+    return KVADDR(page2pa(page));
+}
+
+static inline struct Page *kva2page(void *kva) {
+    return pa2page(PADDR(kva));
+}
+
+static inline struct Page *pte2page(pte_t pte) {
+    if (!(pte & PTE_P)) {
+        panic("pte2page called with invalid pte\n");
+    }
+    return pa2page(PTE_ADDR(pte));
+}
+
+static inline struct Page *pde2page(pde_t pde) {
+    if (!(pde & PTE_P)) {
+        panic("pde2page called with invalid pde\n");
+    }
+    return pa2page(PDE_ADDR(pde));
+}
 
 static inline int page_ref(struct Page *page) {
     return atomic_read(&(page->ref));
@@ -58,5 +120,7 @@ static inline int page_ref_inc(struct Page *page) {
 static inline int page_reg_dec(struct Page *page) {
     return atomic_sub_return(&(page->ref), 1);
 }
+
+extern char boot_stack[], boot_stack_top[];
 
 #endif // __KERNEL_MM_PMM_H__

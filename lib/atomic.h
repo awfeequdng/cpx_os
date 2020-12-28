@@ -1,6 +1,8 @@
 #ifndef __LIBS_ATOMIC_H__
 #define __LIBS_ATOMIC_H__
 
+#include <types.h>
+
 #define LOCK_PREFIX ""
 
 typedef struct {

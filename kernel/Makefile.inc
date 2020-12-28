@@ -9,7 +9,8 @@ KERNEL_INC += kernel/driver \
 			  kernel/trap \
 			  kernel/init \
 			  kernel/mm \
-			  kernel/lib
+			  kernel/lib \
+			  kernel/sync
 
 KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/trap/trap.c \
@@ -24,7 +25,8 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/lib/stdio.c \
 		kernel/debug/panic.c \
 		kernel/driver/clock.c \
-		kernel/mm/pmm.c
+		kernel/mm/pmm.c \
+		kernel/mm/default_pmm.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \
