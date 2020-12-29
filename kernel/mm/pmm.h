@@ -28,7 +28,7 @@ size_t nr_free_pages(void);
 #define alloc_page() alloc_pages(1)
 #define free_page(page) free_pages(page, 1)
 
-pte_t *get_pte(pde_t *pgdir, uintptr_t vaddr, bool create);
+pte_t *get_pte(pde_t *pgdir, uintptr_t va, bool create);
 // ptep返回vaddr对应的页表项
 struct Page *get_page(pde_t *pgdir, uintptr_t vaddr, pte_t **ptep);
 void page_remove(pde_t *pgdir, uintptr_t vaddr);

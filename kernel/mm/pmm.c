@@ -139,6 +139,7 @@ static void page_init(void) {
         SetPageReserved(pages_base + i);
     }
 
+
     uintptr_t free_mem = PADDR((uintptr_t)pages_base + sizeof(struct Page) * pages_num);
 
 
@@ -201,7 +202,34 @@ static void check_pgdir(void) {
     // assert(get_page(boot_pgdir, ))
 }
 
+extern pte_t entry_page_table[];
+extern pde_t entry_page_dir[];
 
+void kernel_page_table_init() {
+    int i;
+    int page_cnt = 0;
+
+    boot_pgdir = entry_page_dir;
+    boot_cr3 = PADDR(boot_pgdir);
+
+    // 初始化所有的页表项，总共256个页表，每个页表1024项，总共可以映射1G的地址空间
+    // 实际上我们不需要映射1G的地址空间，应为内核最大可用的线性地址为896M，也就是224个页表
+    // page放在一个连续的1M地址空间中
+    pte_t *page_table = entry_page_table;
+    // int page_table_entries = 1024 * 256;
+    // 映射0xc0000000 ~ 0xf8000000的地址空间，需要224个页表
+    // 同时，我们实际的物理地址可能没有896M，此时肯能需要映射的页表就更小了
+    page_cnt = 224;
+    int page_table_entries = 1024 * page_cnt;
+    for (i = 1024; i < page_table_entries; i++) {
+        page_table[i] = (i << PAGE_SHIFT) | PTE_P | PTE_W; 
+    }
+    // 初始化224个页目录项
+    // [KERNEL_BASE >> PDX_SHIFT] = ((uintptr_t)entry_page_table - KERNEL_BASE) + PTE_P + PTE_W
+    for (i = 1; i < page_cnt; i++) {
+        boot_pgdir[(KERNEL_BASE >> PDX_SHIFT) + i] = PADDR(page_table + (i * 1024)) | PTE_P | PTE_W;
+    }
+}
 
 void pmm_init(void) {
     //We need to alloc/free the physical memory (granularity is 4KB or other size). 
@@ -212,13 +240,23 @@ void pmm_init(void) {
     init_pmm_manager();
 
     page_init();
-    // 当前我们的页表只对[0xc0000000, 0xc0400000)的虚拟地址进行了映射，
-    // 而调试发现boot_pgdir得到的地址却是0xc7fdf000，所以在对这个地址进行清零
-    // 的操作会产生异常，应该是page fault异常，为了确定这个异常，我们可以在
-    // trap中对page fault异常打印出提示信息
-    boot_pgdir = boot_alloc_page();
-    // memset(boot_pgdir, 0, PAGE_SIZE);
-    boot_cr3 = PADDR(boot_pgdir);
+
+    // 初始化内核页表，当前页表只映射了[0xc0000000, 0xc0400000)的虚拟地址，
+    // 现在将将内核的映射扩大为[0xc0000000, 0xf8000000)，
+    kernel_page_table_init();
+
+    struct Page *page = alloc_page();
+    uintptr_t kvaddr = page2kva(page);
+    memset(kvaddr, 0, PAGE_SIZE);
+    free_page(page);
 
     gdt_init();
+}
+
+pte_t *get_pte(pde_t *pgdir, uintptr_t va, bool create) {
+    pde_t *pdep = &pgdir[PDX(va)];
+    if (!(*pdep & PTE_P)) {
+        struct Page *page;
+    }
+
 }

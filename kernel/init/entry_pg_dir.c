@@ -2,7 +2,7 @@
 #include <memlayout.h>
 #include <types.h>
 
-extern pte_t entry_page_table[PTE_ENTRIES];
+extern pte_t entry_page_table[];
 
 __attribute__((__aligned__(PAGE_SIZE)))
 pde_t entry_page_dir[PDE_ENTRIES] = {
@@ -10,8 +10,10 @@ pde_t entry_page_dir[PDE_ENTRIES] = {
 	[KERNEL_BASE >> PDX_SHIFT] = ((uintptr_t)entry_page_table - KERNEL_BASE) + PTE_P + PTE_W
 };
 
+// 内核页表，用于映射[0xc0000000, 0xffffffff]这1G的内核地址到[0, 0x3fffffff]这个物理地址
+// 目前只初始化了[0xc0000000,0xc0400000)，这个虚拟地址的映射，
 __attribute__((__aligned__(PAGE_SIZE)))
-pte_t entry_page_table[PTE_ENTRIES] = {
+pte_t entry_page_table[PTE_ENTRIES * 256] = {
 	0x000000 | PTE_P | PTE_W,
 	0x001000 | PTE_P | PTE_W,
 	0x002000 | PTE_P | PTE_W,
