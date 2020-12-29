@@ -30,11 +30,13 @@ size_t nr_free_pages(void);
 
 pte_t *get_pte(pde_t *pgdir, uintptr_t va, bool create);
 // ptep返回vaddr对应的页表项
-struct Page *get_page(pde_t *pgdir, uintptr_t vaddr, pte_t **ptep);
-void page_remove(pde_t *pgdir, uintptr_t vaddr);
-int page_insert(pde_t *pgdir, struct Page *page, uintptr_t vaddr, uint32_t perm);
+struct Page *get_page(pde_t *pgdir, uintptr_t va, pte_t **ptep_store);
+void page_remove(pde_t *pgdir, uintptr_t va);
+int page_insert(pde_t *pgdir, struct Page *page, uintptr_t va, uint32_t perm);
 
 void tlb_invalidate(pde_t *pgdir, uintptr_t vaddr);
+
+void check_pgdir(void);
 
 void print_pgdir(void);
 
@@ -117,7 +119,7 @@ static inline int page_ref_inc(struct Page *page) {
     return atomic_add_return(&(page->ref), 1);
 }
 
-static inline int page_reg_dec(struct Page *page) {
+static inline int page_ref_dec(struct Page *page) {
     return atomic_sub_return(&(page->ref), 1);
 }
 

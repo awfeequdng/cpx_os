@@ -7,7 +7,9 @@
 #define KERNEL_MEM_SIZE 0x38000000
 #define KERNEL_TOP      (KERNEL_BASE + KERNEL_MEM_SIZE)
 
-#define K_STACK_TOP  KERNEL_BASE
+#define VPT     0xFAC00000
+
+// #define K_STACK_TOP  KERNEL_BASE
 #define K_STACK_SIZE (8 * PAGE_SIZE)
 
 // 内核代码段

@@ -5,6 +5,7 @@
 #include <pmm.h>
 #include <default_pmm.h>
 #include <sync.h>
+#include <error.h>
 
 
 static struct SegDesc gdt[] = {
@@ -38,6 +39,11 @@ pde_t *boot_pgdir = NULL;
 
 // boot_cr3位页目录的物理地址（非虚拟地址）
 uintptr_t boot_cr3;
+
+
+pte_t *const v_pg_table = (pte_t *)VPT;
+pde_t *const v_pg_dir = (pde_t *)PAGE_ADDR(PDX(VPT), PDX(VPT), 0);
+
 
 const struct PmmManager *pmm_manager;
 
@@ -191,17 +197,6 @@ static void *boot_alloc_page(void) {
     return page2kva(page);
 }
 
-    //use pmm->check to verify the correctness of the alloc/free function in a pmm
-static void check_alloc_page() {
-    pmm_manager->check();
-}
-
-static void check_pgdir(void) {
-    assert(get_npage() <= KERNEL_MEM_SIZE / PAGE_SIZE);
-    assert(boot_pgdir != NULL && (uintptr_t)PAGE_OFF(boot_pgdir) == 0);
-    // assert(get_page(boot_pgdir, ))
-}
-
 extern pte_t entry_page_table[];
 extern pde_t entry_page_dir[];
 
@@ -229,6 +224,9 @@ void kernel_page_table_init() {
     for (i = 1; i < page_cnt; i++) {
         boot_pgdir[(KERNEL_BASE >> PDX_SHIFT) + i] = PADDR(page_table + (i * 1024)) | PTE_P | PTE_W;
     }
+
+    // 将[0,4M)的映射拆除
+    boot_pgdir[0] = 0;
 }
 
 void pmm_init(void) {
@@ -250,13 +248,189 @@ void pmm_init(void) {
     memset(kvaddr, 0, PAGE_SIZE);
     free_page(page);
 
+    check_pgdir();
+
     gdt_init();
 }
 
+// 从页目录查找页表，如果页表不存在，根据create参数来决定是否创建新的页表
+// 最后在对应的页表中查找到va虚拟地址对应的页表项
 pte_t *get_pte(pde_t *pgdir, uintptr_t va, bool create) {
+    pte_t *ptep = NULL;
     pde_t *pdep = &pgdir[PDX(va)];
     if (!(*pdep & PTE_P)) {
         struct Page *page;
+        if (!create || (page = alloc_page()) == NULL) {
+            return NULL;
+        }
+        set_page_ref(page, 1);
+        uintptr_t pa = page2pa(page);
+        memset(KVADDR(pa), 0, PAGE_SIZE);
+        *pdep = pa | PTE_U | PTE_W | PTE_P;
     }
+    
+    ptep = (pte_t *)KVADDR(PDE_ADDR(*pdep));
+    return &ptep[PTX(va)];
+}
 
+struct Page *get_page(pde_t *pgdir, uintptr_t va, pte_t **ptep_store) {
+    pte_t *ptep = get_pte(pgdir, va, 0);
+    if (ptep_store != NULL) {
+        *ptep_store = ptep;
+    }
+    if (ptep != NULL && *ptep & PTE_P) {
+        return pa2page(*ptep);
+    }
+    return NULL;
+}
+
+static inline void page_remove_pte(pde_t *pgdir, uintptr_t va, pte_t *ptep) {
+    if (*ptep & PTE_P) {
+        struct Page *page = pte2page(*ptep);
+        if (page_ref_dec(page) == 0) {
+            free_page(page);
+        }
+        *ptep = 0;
+        tlb_invalidate(pgdir, va);
+    }
+}
+
+void page_remove(pde_t *pgdir, uintptr_t va) {
+    pte_t *ptep = get_pte(pgdir, va, 0);
+    if (ptep != NULL) {
+        page_remove_pte(pgdir, va, ptep);
+    }
+}
+
+int page_insert(pde_t *pgdir, struct Page *page, uintptr_t va, uint32_t perm) {
+    pte_t *ptep = get_pte(pgdir, va, 1);
+    if (ptep == NULL) {
+        return -E_NO_MEM;
+    }
+    page_ref_inc(page);
+    if (*ptep & PTE_P) {
+        struct Page *p = pte2page(*ptep);
+        if (p == page) {
+            page_ref_dec(page);
+        } else {
+            page_remove_pte(pgdir, va, ptep);
+        }
+    }
+    *ptep = page2pa(page) | PTE_P | perm;
+    tlb_invalidate(pgdir, va);
+    return 0;
+}
+
+void tlb_invalidate(pde_t *pgdir, uintptr_t va) {
+    if (rcr3() == PADDR(pgdir)) {
+        invlpg((void *)va);
+    }
+}
+
+static void check_alloc_page(void) {
+    pmm_manager->check();
+    printk("check_alloc_page() successed!\n");
+}
+
+void check_pgdir(void) {
+    assert(get_npage() <= KERNEL_MEM_SIZE / PAGE_SIZE);
+    assert(boot_pgdir != NULL && (uintptr_t)PAGE_OFF(boot_pgdir) == 0);
+    // 当前是[0, 4M)的虚拟地址的映射已经被拆除了
+    assert(get_page(boot_pgdir, 0x0, NULL) == 0);
+
+    struct Page *p1, *p2;
+    p1 = alloc_page();
+    assert(page_insert(boot_pgdir, p1, 0x0, 0) == 0);
+
+    pte_t *ptep;
+    assert((ptep = get_pte(boot_pgdir, 0x0, 0)) != NULL);
+    assert(pa2page(*ptep) == p1);
+    assert(page_ref(p1) == 1);
+
+    ptep = &((pte_t *)KVADDR(PDE_ADDR(boot_pgdir[0])))[1];
+    assert(get_pte(boot_pgdir, PAGE_SIZE, 0) == ptep);
+    
+    p2 = alloc_page();
+    assert(page_insert(boot_pgdir, p2, PAGE_SIZE, PTE_U | PTE_W) == 0);
+    assert((ptep = get_pte(boot_pgdir, PAGE_SIZE, 0)) != NULL);
+    assert(*ptep & PTE_U);
+    assert(*ptep & PTE_W);
+    assert(boot_pgdir[0] & PTE_U);
+    assert(page_ref(p2) == 1);
+
+    assert(page_insert(boot_pgdir, p1, PAGE_SIZE, 0) == 0);
+    // 将p1映射到0和PAGE_SIZE这两个页，因此ref为2
+    assert(page_ref(p1) == 2);
+    // p1占据了p2的位置，因此p2被释放掉了
+    assert(page_ref(p2) == 0);
+    assert((ptep = get_pte(boot_pgdir, PAGE_SIZE, 0)) != NULL);
+    assert(pa2page(*ptep) == p1);
+    assert((*ptep & PTE_U) == 0);
+
+    page_remove(boot_pgdir, 0x0);
+    // 将0x0处的地址映射拆除，因此对p1的引用减1
+    // 此时还有PAGE_SIZE处的映射存在
+    assert(page_ref(p1) == 1);
+    assert(page_ref(p2) == 0);
+
+    page_remove(boot_pgdir, PAGE_SIZE);
+    assert(page_ref(p1) == 0);
+    assert(page_ref(p2) == 0);
+
+    // 页目录项0依然引用了第0个页表，但此时页表内的内容都是无效的，可以释放第0个页表的page
+    assert(page_ref(pa2page(boot_pgdir[0])) == 1);
+    free_page(pa2page(boot_pgdir[0]));
+    boot_pgdir[0] = 0;
+
+    printk("----------check_pgdir successed!-------------\n");
+}
+
+
+//perm2str - use string 'u,r,w,-' to present the permission
+static const char *perm2str(int perm) {
+    static char str[4];
+    str[0] = (perm & PTE_U) ? 'u' : '-';
+    str[1] = 'r';
+    str[2] = (perm & PTE_W) ? 'w' : '-';
+    str[3] = '\0';
+    return str;
+}
+
+static int get_pgtable_items(size_t left, size_t right, size_t start,
+    uintptr_t *table, size_t *left_store, size_t *right_store) {
+    if (start >= right) {
+        return 0;
+    }
+    while (start < right && !(table[start] & PTE_P)) {
+        start++;
+    }
+    if (start < right) {
+        if (left_store != NULL) {
+            *left_store = start;
+        }
+        int perm = (table[start++] & PTE_USER);
+        while (start < right && (table[start] & PTE_USER) == perm) {
+            start++;
+        }
+        if (right_store != NULL) {
+            *right_store = start;
+        }
+        return perm;
+    }
+    return 0;
+}
+
+void print_pgdir(void) {
+    printk("------------------------BEGIN-------------------\n");
+    size_t left, right = 0, perm;
+    while ((perm = get_pgtable_items(0, PDE_ENTRIES, right, v_pg_dir, &left, &right)) != 0) {
+        printk("PDE(%03x) %08x-%08x %08x %s\n", right - left,
+            left * PT_SIZE, right * PT_SIZE, (right - left) * PT_SIZE, perm2str(perm));
+        size_t l, r = left * PTE_ENTRIES;
+        while ((perm = get_pgtable_items(left * PTE_ENTRIES, right * PTE_ENTRIES, r, v_pg_table, &l, &r)) != 0) {
+            printk("  |-- PTE(%05x) %08x-%08x %08x %s\n", r - l,
+                l * PAGE_SIZE, r * PAGE_SIZE, (r - l) * PAGE_SIZE, perm2str(perm));
+        }
+    }
+    printk("------------------------ END -------------------\n");
 }
