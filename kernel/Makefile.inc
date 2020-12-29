@@ -27,7 +27,8 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/driver/clock.c \
 		kernel/mm/pmm.c \
 		kernel/mm/default_pmm.c \
-		kernel/mm/bestfit_pmm.c
+		kernel/mm/bestfit_pmm.c \
+		kernel/mm/buddy_pmm.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \
