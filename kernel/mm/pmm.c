@@ -4,6 +4,7 @@
 #include <memlayout.h>
 #include <pmm.h>
 #include <default_pmm.h>
+#include <bestfit_pmm.h>
 #include <sync.h>
 #include <error.h>
 
@@ -80,13 +81,19 @@ static void gdt_init(void) {
 }
 
 static void init_pmm_manager(void) {
-    pmm_manager = get_default_pmm_manager();
+    // pmm_manager = get_default_pmm_manager();
+    pmm_manager = get_bestfit_pmm_manager();
     printk("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }
 
 static void init_memmap(struct Page *base, size_t n) {
     pmm_manager->init_memmap(base, n);
+}
+
+static void check_alloc_page(void) {
+    pmm_manager->check();
+    printk("check_alloc_page() successed!\n");
 }
 
 struct Page *alloc_pages(size_t n) {
@@ -227,6 +234,9 @@ void kernel_page_table_init() {
 
     // 将[0,4M)的映射拆除
     boot_pgdir[0] = 0;
+
+    // 自映射，暂时没有完全实现扫描页表的功能：todo
+    boot_pgdir[PDX(VPT)] = boot_cr3;
 }
 
 void pmm_init(void) {
@@ -243,6 +253,9 @@ void pmm_init(void) {
     // 现在将将内核的映射扩大为[0xc0000000, 0xf8000000)，
     kernel_page_table_init();
 
+    //use pmm->check to verify the correctness of the alloc/free function in a pmm
+    check_alloc_page();
+
     struct Page *page = alloc_page();
     uintptr_t kvaddr = page2kva(page);
     memset(kvaddr, 0, PAGE_SIZE);
@@ -251,6 +264,8 @@ void pmm_init(void) {
     check_pgdir();
 
     gdt_init();
+
+    // print_pgdir();
 }
 
 // 从页目录查找页表，如果页表不存在，根据create参数来决定是否创建新的页表
@@ -325,11 +340,6 @@ void tlb_invalidate(pde_t *pgdir, uintptr_t va) {
     if (rcr3() == PADDR(pgdir)) {
         invlpg((void *)va);
     }
-}
-
-static void check_alloc_page(void) {
-    pmm_manager->check();
-    printk("check_alloc_page() successed!\n");
 }
 
 void check_pgdir(void) {

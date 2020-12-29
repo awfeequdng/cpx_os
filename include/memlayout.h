@@ -61,14 +61,21 @@ struct E820Map {
 struct Page {
     atomic_t ref;                   // page frame's reference counter
     uint32_t flags;                 // array of flags that describe the status of the page frame
+    unsigned int property;          // # of pages in continuous memory block
+    int zone_num;                   // used in buddy system, the No. of zone which the page belongs to
     list_entry_t page_link;         // free list link
 };
 
 /* Flags describing the status of a page frame */
 #define PG_reserved                 0       // the page descriptor is reserved for kernel or unusable
+#define PG_property                 1       // the member 'property' is valid
+
 #define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
 #define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
 #define PageReserved(page)          test_bit(PG_reserved, &((page)->flags))
+#define SetPageProperty(page)       set_bit(PG_property, &((page)->flags))
+#define ClearPageProperty(page)     clear_bit(PG_property, &((page)->flags))
+#define PageProperty(page)          test_bit(PG_property, &((page)->flags))
 
 #define le2page(le, member)         \
     container_of((le), struct Page, member)
