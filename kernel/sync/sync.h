@@ -13,7 +13,7 @@ static inline bool __intr_save(void) {
     return 0;
 }
 
-static inline bool __intr_restore(bool flag) {
+static inline void __intr_restore(bool flag) {
     if (flag) {
         intr_enable();
     }

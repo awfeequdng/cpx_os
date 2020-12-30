@@ -2,7 +2,7 @@
 #include <list.h>
 #include <string.h>
 #include <assert.h>
-
+#include <stdio.h>
 
 #define MAX_ORDER   10
 static free_area_t free_area[MAX_ORDER + 1];
@@ -67,9 +67,9 @@ static inline struct Page *buddy_alloc_pages_sub(size_t order) {
         if (!list_empty(&free_list(cur_order))) {
             list_entry_t *le = list_next(&free_list(cur_order));
             struct Page *page = le2page(le, page_link);
-            nr_free(cur_order)--;
             list_del(le);
             size_t size = 1 << cur_order;
+            nr_free(cur_order)--;
             while (cur_order > order) {
                 cur_order--;
                 size >>= 1;
@@ -92,7 +92,7 @@ static struct Page *buddy_alloc_pages(size_t n) {
     size_t order_size = (1 << order);
     struct Page *page = buddy_alloc_pages_sub(order);
 
-    if (page != NULL & n != order_size) {
+    if (page != NULL && n != order_size) {
         free_pages(page + n, order_size - n);
     }
     return page;
@@ -184,7 +184,6 @@ static size_t buddy_nr_free_pages(void) {
     return ret;
 }
 
-
 //buddy_check - check the correctness of buddy system
 static void buddy_check(void) {
     int i;
@@ -269,6 +268,23 @@ static void buddy_check(void) {
     }
     assert(count == 0);
     assert(total == 0);
+    // print_buddy();
+}
+
+void print_buddy(void) {
+    int i;
+    printk("buddy_system:\n");
+    for (i = 0; i <= MAX_ORDER; i++) {
+        list_entry_t *head = &free_list(i);
+        list_entry_t *entry = head;
+        printk("order = %d:\n", i);
+        while ((entry = list_next(entry)) != head) {
+            struct Page *p = le2page(entry, page_link);
+            printk("page = %p, PageProperty = %d, property = %d, PageSlab = %d\n",
+                p, PageProperty(p), p->property, PageSlab(p));
+            assert(PageProperty(p) && p->property == i);
+        }
+    }
 }
 
 //the buddy system pmm

@@ -2,6 +2,7 @@
 #include <list.h>
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
 
 static free_area_t free_area;
 

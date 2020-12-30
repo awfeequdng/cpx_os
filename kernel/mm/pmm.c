@@ -8,6 +8,8 @@
 #include <buddy_pmm.h>
 #include <sync.h>
 #include <error.h>
+#include <string.h>
+#include <stdio.h>
 
 
 static struct SegDesc gdt[] = {
@@ -29,7 +31,7 @@ struct Page *pages_base;
 
 size_t pages_num = 0;
 
-const struct Page *get_pages_base(void) {
+struct Page *get_pages_base(void) {
     return pages_base;
 }
 
@@ -259,7 +261,7 @@ void pmm_init(void) {
     check_alloc_page();
 
     struct Page *page = alloc_page();
-    uintptr_t kvaddr = page2kva(page);
+    uintptr_t kvaddr = (uintptr_t)page2kva(page);
     memset(kvaddr, 0, PAGE_SIZE);
     free_page(page);
 

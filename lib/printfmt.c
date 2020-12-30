@@ -2,27 +2,12 @@
 #include <error.h>
 #include <stdarg.h>
 #include <string.h>
+#include <x86.h>
 
 static const char *error_string[MAX_ERROR] = {
 	[E_INVAL] = "invalid parameter",
 };
 
-
-// todo: 这段除法的意图是什么？？
-#define do_div(n, base) ({                                          \
-            unsigned long __upper, __low, __high, __mod, __base;    \
-            __base = (base);                                        \
-            asm("" : "=a" (__low), "=d" (__high) : "A" (n));        \
-            __upper = __high;                                       \
-            if (__high != 0) {                                      \
-                __upper = __high % __base;                          \
-                __high = __high / __base;                           \
-            }                                                       \
-            asm("divl %2" : "=a" (__low), "=d" (__mod)              \
-                : "rm" (__base), "0" (__low), "1" (__upper));       \
-            asm("" : "=A" (n) : "a" (__low), "d" (__high));         \
-            __mod;                                                  \
-        })
 
 
 static void printnum(void (*putc)(int, void*), void *putbuf,

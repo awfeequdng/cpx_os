@@ -39,7 +39,7 @@ OBJDUMP = $(COMPILE_PREFIX)objdump
 NM	= $(COMPILE_PREFIX)nm
 
 # 编译选项详情见：https://zhuanlan.zhihu.com/p/316007378
-CFLAGS := $(CFLAGS) -fno-builtin -m32 -O0
+CFLAGS := $(CFLAGS) -fno-builtin -m32 -O2
 CFLAGS += -static -std=gnu99
 CFLAGS += -fno-omit-frame-pointer -Wall -MD 
 # 不需要位置无关代码

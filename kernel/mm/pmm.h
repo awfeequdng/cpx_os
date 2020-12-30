@@ -63,7 +63,7 @@ void print_pgdir(void);
             (void *) (__pa + KERNEL_BASE);                          \
             })
 
-const struct Page *get_pages_base(void);
+struct Page *get_pages_base(void);
 const size_t get_npage(void);
 
 // 根据page获取物理页索引号

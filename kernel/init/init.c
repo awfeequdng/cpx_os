@@ -4,10 +4,11 @@
 #include <console.h>
 #include <kmonitor.h>
 #include <assert.h>
-#include <x86.h>
+#include <intr.h>
 #include <clock.h>
 #include <pic_irq.h>
 #include <pmm.h>
+#include <slab.h>
 
 void printk_test(void)
 {
@@ -67,7 +68,11 @@ void start_kernel(void)
 	// 重新初始化分段，使用pmm对段重新进行初始化，在初始化之前已经开启了分页
 	// 也就是说，我们通过lgdt加载的是虚拟地址，而不是物理地址
 	// 为什么加载的是虚拟地址程序也不跑飞？？
+	// 测试发现，我们使用物理地址时反而跑飞，使用虚拟地址可以正常工作，说明开启分页后，lgdt指令使用的是虚拟地址
 	pmm_init();
+
+	// slab缓存初始化
+	slab_init();
 
 	// 初始化中断描述符表，此处已经开启了分页，加载的中断描述符地址应该是虚拟地址，
 	// 不是物理地址，所以应该找不到中断描述符地址才对？此处为什么没有错误？
@@ -76,7 +81,7 @@ void start_kernel(void)
 	// clock_init();
 
 	// 开启总中断
-	sti();
+	intr_enable();
 
 	// panic("before monitor\n");
 

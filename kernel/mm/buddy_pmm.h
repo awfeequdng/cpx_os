@@ -4,5 +4,6 @@
 #include <pmm.h>
 
 const struct PmmManager *get_buddy_pmm_manager(void);
+void print_buddy(void);
 
 #endif //__KERNEL_MM_BUDDY_PMM_H__
