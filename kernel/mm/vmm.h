@@ -5,7 +5,7 @@
 #include <list.h>
 #include <memlayout.h>
 #include <sync.h>
-
+#include <rbtree.h>
 
 struct MmStruct;
 
@@ -16,11 +16,15 @@ struct VmaStruct {
     uintptr_t vm_end;
 
     uint32_t vm_flags;
+    rbtree_node_t rb_link;
     list_entry_t vma_link;
 };
 
 #define le2vma(le, member)  \
     container_of(le, struct VmaStruct, member)
+
+#define rbn2vma(node, member)   \
+    container_of(node, struct VmaStruct, member)
 
 #define VM_READ         0x00000001
 #define VM_WRITE        0x00000002
@@ -28,6 +32,7 @@ struct VmaStruct {
 
 struct MmStruct {
     list_entry_t mmap_link;
+    rbtree_t mmap_tree;        // 紅黑樹，用於鏈接VmmStruct，紅黑樹按照vmm的start 地址排序
     struct VmaStruct *mmap_cache;
     pde_t *page_dir;
     int map_count;

@@ -6,14 +6,22 @@
 #include <sync.h>
 #include <error.h>
 
+static int vma_compare(rbtree_node_t *node1, rbtree_node_t *node2) {
+    struct VmaStruct *vma1 = rbn2vma(node1, rb_link);
+    struct VmaStruct *vma2 = rbn2vma(node2, rb_link);
+    uintptr_t start1 = vma1->vm_start;
+    uintptr_t start2 = vma2->vm_start;
+    return (start1 < start2) ? -1 : ((start1 > start2) ? 1 : 0);
+}
+
 struct MmStruct *mm_create(void) {
     struct MmStruct *mm = kmalloc(sizeof(struct MmStruct));
     if (mm != NULL) {
         list_init(&(mm->mmap_link));
         mm->mmap_cache = NULL;
         mm->page_dir = NULL;
+        rbtree_init(&(mm->mmap_tree), rbtree_sentinel(), vma_compare);
         mm->map_count = 0;
-
     }
 
     return mm;
@@ -25,31 +33,58 @@ struct VmaStruct *vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_f
         vma->vm_start = vm_start;
         vma->vm_end = vm_end;
         vma->vm_flags = vm_flags;
+        rbtree_node_init(&(vma->rb_link), rbtree_sentinel());
         list_init(&(vma->vma_link));
     }
     return vma;
 }
 
+// 找到addr右邊最近的vma
+static inline struct VmaStruct *find_vma_rb(rbtree_t *tree, uintptr_t addr) {
+    rbtree_node_t *node = rbtree_root(tree);
+    struct VmaStruct *tmp = NULL;
+    struct VmaStruct *vma = NULL;
+    while (node  != rbtree_sentinel()) {
+        tmp = rbn2vma(node, rb_link);
+        if (tmp->vm_end > addr) {
+            // vma爲addr右邊第一個出現的vma，包括addr在vma的地址範圍內
+            vma = tmp;
+            if (tmp->vm_start <= addr) {
+                // addr 在vma的地址範圍內
+                break;
+            }
+            node = node->left;
+        } else {
+            node = node->right;
+        }
+    }
+    return vma;
+}
 
 struct VmaStruct *find_vma(struct MmStruct *mm, uintptr_t addr) {
     struct VmaStruct *vma = NULL;
     if (mm != NULL) {
         vma = mm->mmap_cache;
         if (!(vma != NULL && vma->vm_start <= addr && vma->vm_end > addr)) {
-            bool found = 0;
-            list_entry_t *head = &(mm->mmap_link);
-            list_entry_t *entry = head;
-            // vma鏈表是按地址從小到大排序的
-            while ((entry = list_next(entry)) != head) {
-                vma = le2vma(entry, vma_link);
-                if (addr < vma->vm_end) {
-                    // addr可能在vma的左邊，也可能在vma內部
-                    found = 1;
-                    break;
+            // 紅黑樹非空
+            if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel()) {
+                vma = find_vma_rb(&(mm->mmap_tree), addr);
+            } else {
+                bool found = 0;
+                list_entry_t *head = &(mm->mmap_link);
+                list_entry_t *entry = head;
+                // vma鏈表是按地址從小到大排序的
+                while ((entry = list_next(entry)) != head) {
+                    vma = le2vma(entry, vma_link);
+                    if (addr < vma->vm_end) {
+                        // addr可能在vma的左邊，也可能在vma內部
+                        found = 1;
+                        break;
+                    }
                 }
-            }
-            if (!found) {
-                vma = NULL;
+                if (!found) {
+                    vma = NULL;
+                }
             }
         }
         if (vma != NULL) {
@@ -65,13 +100,34 @@ static inline void check_vma_overlap(struct VmaStruct *prev, struct VmaStruct *n
     assert(next->vm_start < next->vm_end);
 }
 
+static inline void insert_vma_rb(rbtree_t *tree, struct VmaStruct *vma, struct VmaStruct **vma_prevp) {
+    rbtree_node_t *node = &(vma->rb_link);
+    rbtree_node_t *prev = NULL;
+    rbtree_insert(tree, node);
+    if (vma_prevp != NULL) {
+        prev = rbtree_predecessor(tree, node);
+        if (prev != rbtree_sentinel()) {
+            *vma_prevp = rbn2vma(prev, rb_link);
+        } else {
+            *vma_prevp = NULL;
+        }
+    }
+}
+
 void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     assert(vma->vm_start < vma->vm_end);
     list_entry_t *head = &(mm->mmap_link);
     list_entry_t *entry_prev = head;
     list_entry_t *entry_next = NULL;
+    list_entry_t *entry = NULL;
     
-    {
+    if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel()) {
+        struct VmaStruct *mmap_prev = NULL;
+        insert_vma_rb(&(mm->mmap_tree), vma, &mmap_prev);
+        if (mmap_prev != NULL) {
+            entry_prev = &(mmap_prev->vma_link);
+        }
+    } else {
         list_entry_t *entry = head;
         while ((entry = list_next(entry)) != head) {
             struct VmaStruct *mmap_prev = le2vma(entry, vma_link);
@@ -96,6 +152,15 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     list_add_after(entry_prev, &(vma->vma_link));
 
     mm->map_count++;
+
+    if (rbtree_root(&mm->mmap_tree) == rbtree_sentinel() &&
+        mm->map_count >= RB_MIN_MAP_COUNT) {
+        head = &(mm->mmap_link);
+        entry = head;
+        while ((entry = list_next(entry)) != head) {
+            insert_vma_rb(&(mm->mmap_tree), le2vma(entry, vma_link), NULL);
+        }
+    }
 }
 
 void mm_destory(struct MmStruct *mm) {

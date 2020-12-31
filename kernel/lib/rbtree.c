@@ -5,6 +5,17 @@
 // 所有的紅黑樹的sentinel都是用這個變量
 static rbtree_node_t sentinel;
 
+rbtree_node_t *rbtree_sentinel(void) {
+	return &sentinel;
+}
+
+rbtree_node_t *rbtree_root(rbtree_t *tree) {
+	if (tree != NULL) {
+		return tree->root;
+	}
+	return &sentinel;
+}
+
 void rbtree_left_rotate(rbtree_t *tree,
 		rbtree_node_t *node) {
 	
@@ -200,7 +211,8 @@ void rbtree_insert(rbtree_t *tree, rbtree_node_t *z) {
 	// 即y节点为小于z的最大节点，x为nil的节点
 	while (x != tree->sentinel) {
 		y = x;
-		if (z->key < x->key) {
+		if (tree->cmp_node(z, x) < 0) {
+			// z < x
 			x = x->left;
 		} else {
 			x = x->right;
@@ -210,11 +222,12 @@ void rbtree_insert(rbtree_t *tree, rbtree_node_t *z) {
 		// 当前树为空
 		tree->root = z;
 		z->parent = tree->sentinel;
-	} else if (y->key > z->key) {
+	} else if (tree->cmp_node(z, y) < 0) {
+		// z < y
 		y->left = z;
 		z->parent = y;
 	} else {
-		// y->key <= z->key
+		// y <= z
 		y->right = z;
 		z->parent = y;
 	}
@@ -397,11 +410,19 @@ void rbtree_delete(rbtree_t *tree, rbtree_node_t *z) {
 		rbtree_delete_fixup(tree, x);
 	}
 }
+// ============================ 以下的代碼都是用於測試 ============================
 
+typedef struct key_struct_s {
+	rbtree_node_t node;
+	int key;
+}key_struct_t;
+
+#define rbn2key(node, member) \
+	container_of(node, key_struct_t, member)
 
 void get_rbtree_node_preorder(rbtree_node_t *node, rbtree_node_t *sentinel, int arr[], int *index) {
-	arr[*index] = node->key;
-	// printk(" (val,color)=(%ld, %s) ", node->key, (node->color ? "r" : "b"));
+	struct key_struct_s *key_p = rbn2key(node, node);
+	arr[*index] = key_p->key;
 	*index += 1;
 	if (node->left != sentinel) {
 		get_rbtree_node_preorder(node->left, sentinel, arr, index);
@@ -415,7 +436,6 @@ int *get_rbtree_preorder(rbtree_t *tree, int size) {
 	int *arr = (int *)kmalloc(sizeof(int) * size);
 	int index = 0;
 	get_rbtree_node_preorder(tree->root, tree->sentinel, arr, &index);
-	// printk("\n");
 	return arr;
 }
 
@@ -442,39 +462,54 @@ void test_rbtree_right_rotate(rbtree_t *tree, rbtree_node_t *node) {
 	rbtree_right_rotate(tree, node);
 }
 
+static int key_struct_cmp(rbtree_node_t *node1, rbtree_node_t *node2) {
+	key_struct_t *key1 = rbn2key(node1, node);
+	key_struct_t *key2 = rbn2key(node1, node);
+	
+	int ret = key1->key - key2->key;
+	if (ret == 0) {
+		return ret;
+	} else if (ret < 0) {
+		return -1;
+	} else {
+		return 1;
+	}
+}
+
 void test_rbtree_rotate() {
 	rbtree_t tree;	
-	rbtree_init(&tree, &sentinel, rbtree_insert_value);
-    rbtree_node_t node[6] = {{0}};
+	rbtree_init(&tree, &sentinel, key_struct_cmp);
+    key_struct_t node[6] = {{0}};
     
-    tree.root = &node[0];
-    node[0].parent = &sentinel;
+    tree.root = &(node[0].node);
+	rbtree_node_init(&(node[0].node), &sentinel);
+
     node[0].key = 0;
-    node[0].left = &node[1];
-    node[0].right = &node[2];
-    node[1].parent = &node[0];
-    node[2].parent = &node[0];
+    node[0].node.left = &node[1];
+    node[0].node.right = &node[2];
+    node[1].node.parent = &node[0];
+    node[2].node.parent = &node[0];
     node[1].key = 1;
     node[2].key = 2;
 
-    node[1].left = &node[3];
-    node[1].right = &node[4];
-    node[3].parent = &node[1];
-    node[4].parent = &node[1];
-    node[3].left = &sentinel;
-    node[3].right = &sentinel;
-    node[4].left = &sentinel;
-    node[4].right = &sentinel;
+    node[1].node.left = &node[3];
+    node[1].node.right = &node[4];
+    node[3].node.parent = &node[1];
+    node[4].node.parent = &node[1];
+    node[3].node.left = &sentinel;
+    node[3].node.right = &sentinel;
+    node[4].node.left = &sentinel;
+    node[4].node.right = &sentinel;
     node[3].key = 3;
     node[4].key = 4;
 
 
-    node[2].left = &node[5];
-    node[2].right = &sentinel;
-    node[5].parent = &node[2];
+    node[2].node.left = &node[5];
+    node[2].node.right = &sentinel;
+    node[5].node.parent = &node[2];
     node[5].key = 5;
-    node[5].left = &sentinel;
-    node[5].right = &sentinel;	
+    node[5].node.left = &sentinel;
+    node[5].node.right = &sentinel;	
 
 
 	test_rbtree_left_rotate(&tree, tree.root);
@@ -488,12 +523,12 @@ void test_rbtree_rotate() {
 
 void test_rbtree_insert() {
 	rbtree_t tree;
-	rbtree_init(&tree, &sentinel, rbtree_insert_value);
+	rbtree_init(&tree, &sentinel, key_struct_cmp);
 
-	rbtree_node_t nodes[6] = {{0}};
+	key_struct_t nodes[6] = {{0}};
 	for (int i = 0; i < 6; i++) {
 		nodes[i].key = i;
-		rbtree_insert(&tree, &nodes[i]);
+		rbtree_insert(&tree, &(nodes[i].node));
 	}
 	int arr[6] = {1, 0, 3, 2, 4, 5};
 	assert_rbtree(&tree, arr, 6);
@@ -501,17 +536,17 @@ void test_rbtree_insert() {
 
 void test_rbtree_delete() {
 	rbtree_t tree;
-    rbtree_init(&tree, &sentinel, rbtree_insert_value);
+    rbtree_init(&tree, &sentinel, key_struct_cmp);
 
-    rbtree_node_t nodes[6] = {{0}};
+    key_struct_t nodes[6] = {{0}};
     for (int i = 0; i < 6; i++) {
         nodes[i].key = i;
-        rbtree_insert(&tree, &nodes[i]);
+        rbtree_insert(&tree, &(nodes[i].node));
     }   
     int arr[6] = {1, 0, 3, 2, 4, 5}; 
     assert_rbtree(&tree, arr, 6);
 
-	rbtree_delete(&tree, &nodes[0]);
+	rbtree_delete(&tree, &(nodes[0].node));
 	int arr2[5] = {3, 1, 2, 4, 5};
 	assert_rbtree(&tree, arr2, 5);
 }

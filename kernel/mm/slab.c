@@ -54,7 +54,6 @@ void check_slab(void);
 
 void slab_init(void) {
     size_t i;
-
     // slab中obj的对齐值，最好为2^n
     size_t align = 16;
     for (i = 0; i < SLAB_CACHE_NUM; i++) {

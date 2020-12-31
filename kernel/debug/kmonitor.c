@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <buddy_pmm.h>
 
 struct Command {
     const char *name;
@@ -14,6 +15,7 @@ struct Command {
 static struct Command commands[] = {
     {"help", "Display this list of commands.", monitor_help},
     {"kernel_info", "Display information about the kernel.", monitor_kernel_info},
+    {"buddy_info", "Display information about the buddy system.", monitor_buddy_info},
 	// {"backtrace", "Print backtrace of stack frame.", monitor_backtrace},
 };
 
@@ -77,6 +79,11 @@ int monitor_help(int argc, char **argv, struct TrapFrame *tf) {
     for (i = 0; i < ARRAY_SIZE(commands); i ++) {
         printk("%s - %s\n", commands[i].name, commands[i].desc);
     }
+    return 0;
+}
+
+int monitor_buddy_info(int argc, char **argv, struct TrapFrame *tf) {
+    print_buddy();
     return 0;
 }
 
