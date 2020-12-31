@@ -6,6 +6,7 @@
 #include <console.h>
 #include <assert.h>
 #include <clock.h>
+#include <vmm.h>
 
 // 100个tick就是1s
 #define TICK_HZ		100
@@ -108,10 +109,39 @@ void print_trap_frame(struct TrapFrame *tf) {
 	}
 }
 
+static void print_page_fault(struct TrapFrame *tf) {
+	/* error_code:
+     * bit 0 == 0 means no page found, 1 means protection fault
+     * bit 1 == 0 means read, 1 means write
+     * bit 2 == 0 means kernel, 1 means user
+     * */
+	printk("page fault at 0x%08x: %c/%c [%s].\n", rcr2(),
+		((tf->tf_err & 4) ? 'U' : 'K'),
+		((tf->tf_err & 2) ? 'W' : 'R'),
+		((tf->tf_err & 1) ? "protection fault" : "no page found"));
+}
+
+static int page_fault_handler(struct TrapFrame *tf) {
+	extern struct MmStruct *check_mm_struct;
+	print_page_fault(tf);
+	if (check_mm_struct != NULL) {
+		return do_page_fault(check_mm_struct, tf->tf_err, rcr2());
+	}
+	panic("unhandled page fault.\n");
+}
+
 static void trap_dispatch(struct TrapFrame *tf) {
 	char c;
+	int ret;
+
 	size_t tick;
 	switch (tf->tf_trap_no) {
+		case T_PG_FAULT:
+			if ((ret = page_fault_handler(tf)) != 0) {
+				print_trap_frame(tf);
+				panic("handle page fault failed. %e\n", ret);
+			}
+			break;
 		case IRQ_OFFSET + IRQ_TIMER:
 			// printk("fall in irq timer\n");
 			tick = get_ticks();

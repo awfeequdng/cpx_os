@@ -20,6 +20,8 @@ struct PmmManager {
 
 void pmm_init(void);
 
+pde_t *get_boot_page_dir(void);
+
 struct Page *alloc_pages(size_t n);
 void free_pages(struct Page *base, size_t n);
 size_t nr_free_pages(void);
@@ -35,6 +37,8 @@ void page_remove(pde_t *pgdir, uintptr_t va);
 int page_insert(pde_t *pgdir, struct Page *page, uintptr_t va, uint32_t perm);
 
 void tlb_invalidate(pde_t *pgdir, uintptr_t vaddr);
+
+struct Page *page_dir_alloc_page(pde_t *page_dir, uintptr_t va, uint32_t perm);
 
 void check_pgdir(void);
 

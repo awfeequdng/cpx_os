@@ -40,6 +40,9 @@ const size_t get_npage(void) {
 }
 
 pde_t *boot_pgdir = NULL;
+pde_t *get_boot_page_dir(void) {
+    return boot_pgdir;
+}
 
 // boot_cr3位页目录的物理地址（非虚拟地址）
 uintptr_t boot_cr3;
@@ -267,6 +270,9 @@ void pmm_init(void) {
 
     check_pgdir();
 
+    // slab缓存初始化
+	slab_init();
+
     gdt_init();
 
     // print_pgdir();
@@ -344,6 +350,18 @@ void tlb_invalidate(pde_t *pgdir, uintptr_t va) {
     if (rcr3() == PADDR(pgdir)) {
         invlpg((void *)va);
     }
+}
+
+// 根據va在page_dir這個頁目錄中添加相應的頁表
+struct Page *page_dir_alloc_page(pde_t *page_dir, uintptr_t va, uint32_t perm) {
+    struct Page *page = alloc_page();
+    if (page != NULL) {
+        if (page_insert(page_dir, page, va, perm) != 0) {
+            free_page(page);
+            return NULL;
+        }
+    }
+    return page;
 }
 
 void check_pgdir(void) {

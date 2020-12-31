@@ -9,6 +9,7 @@
 #include <pic_irq.h>
 #include <pmm.h>
 #include <slab.h>
+#include <vmm.h>
 
 void printk_test(void)
 {
@@ -71,12 +72,11 @@ void start_kernel(void)
 	// 测试发现，我们使用物理地址时反而跑飞，使用虚拟地址可以正常工作，说明开启分页后，lgdt指令使用的是虚拟地址
 	pmm_init();
 
-	// slab缓存初始化
-	slab_init();
-
 	// 初始化中断描述符表，此处已经开启了分页，加载的中断描述符地址应该是虚拟地址，
 	// 不是物理地址，所以应该找不到中断描述符地址才对？此处为什么没有错误？
 	idt_init();
+
+	vmm_init();
 
 	// clock_init();
 
