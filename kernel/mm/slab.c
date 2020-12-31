@@ -7,6 +7,7 @@
 #include <intr.h>
 #include <buddy_pmm.h>
 #include <stdio.h>
+#include <rbtree.h>
 
 /* The slab allocator is base on a paper, and the paper can be download from 
    http://citeseer.ist.psu.edu/bonwick94slab.html 
@@ -60,6 +61,7 @@ void slab_init(void) {
         init_kmem_cache(slab_cache + i, 1 << (i + MIN_SIZE_ORDER), align);
     }
     check_slab();
+    check_rbtree();
 }
 
 size_t slab_allocated(void) {
