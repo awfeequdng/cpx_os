@@ -165,10 +165,18 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     }
 }
 
-// static int remove_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
-//     assert(mm == vma->vm_mm);
-//     if (mm->mmap_tree != )
-// }
+static int remove_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
+    assert(mm == vma->vm_mm);
+    if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
+        rbtree_delete(&(mm->mmap_tree), &(vma->rb_link));
+    }
+    list_del(&(vma->vma_link));
+    if (vma == mm->mmap_cache) {
+        mm->mmap_cache = NULL;
+    }
+    mm->map_count--;
+    return 0;
+}
 
 void mm_destory(struct MmStruct *mm) {
     list_entry_t *head = &(mm->mmap_link);
@@ -178,6 +186,10 @@ void mm_destory(struct MmStruct *mm) {
         kfree(le2vma(entry, vma_link));
     }
     kfree(mm);
+}
+
+static void vma_destory(struct VmaStruct *vma) {
+    kfree(vma);
 }
 
 static void check_vmm(void);
@@ -227,48 +239,91 @@ static void vma_resize(struct VmaStruct *vma, uintptr_t start, uintptr_t end) {
     vma->vm_end = end;
 }
 
-// int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len) {
-//     uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
-//     uintptr_t end = ROUNDUP(start + len, PAGE_SIZE);
-//     if (!USER_ACCESS(start, end)) {
-//         return -E_INVAL;
-//     }
-//     assert(mm != NULL);
+// 释放[start, end)虚拟地址范围内映射的物理页
+static void unmap_range(pte_t *page_dir, uintptr_t start, uintptr_t end) {
+    assert(start % PAGE_SIZE == 0 && end % PAGE_SIZE == 0);
+    assert(USER_ACCESS(start, end));
 
-//     struct VmaStruct *vma;
-//     if ((vma = find_vma(mm, start)) == NULL || end <= vma->vm_start) {
-//         // 没有找到addr对应的vma
-//         return 0;
-//     }
-//     // 如果[start, end)在vma的地址范围内，则将vma分成左边界和右边界两个vma
-//     if (vma->vm_start < start && end < vma->vm_end) {
-//         struct VmaStruct *left_vma;
-//         if ((left_vma = vma_create(vma->vm_start, start, vma->vm_flags)) == NULL) {
-//             return -E_NO_MEM;
-//         }
-//         // 解除[start, end)的映射，将vma拆成了[vma->start, start)和[end, vma->end)
-//         // 将vma范围缩小为[end, vma->vm_end)
-//         vma_resize(vma, end, vma->vm_end);
-//         insert_vma_struct(mm, left_vma);
-//         // 将[start, end)的范围内映射的page释放掉
-//         unmap_range(mm->page_dir, start, end);
-//         return 0;
-//     }
+    do {
+        pte_t *ptep = get_pte(page_dir, start, 0);
+        if (ptep == NULL) {
+            start = ROUNDDOWN(start + PT_SIZE, PT_SIZE);
+            continue;
+        }
+        if (*ptep != 0) {
+            page_remove_pte(page_dir, start, ptep);
+        }
+        start += PAGE_SIZE;
+    } while (start != 0 && start < end);
+}
 
-//     list_entry_t free_list, *entry;
-//     list_init(&free_list);
-//     // vma->vm_start < end那么[start, end)和[vma->vm_start, vma->vm_end)一定有交叉
-//     while (vma->vm_start < end) {
-//         entry = list_next(&(vma->vma_link));
-//         remove_vma_struct(mm, vma);
-//     }
+int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len) {
+    uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
+    uintptr_t end = ROUNDUP(start + len, PAGE_SIZE);
+    if (!USER_ACCESS(start, end)) {
+        return -E_INVAL;
+    }
+    assert(mm != NULL);
 
-// }
+    struct VmaStruct *vma;
+    if ((vma = find_vma(mm, start)) == NULL || end <= vma->vm_start) {
+        // 没有找到addr对应的vma
+        return 0;
+    }
+    // 如果[start, end)在vma的地址范围内，则将vma分成左边界和右边界两个vma
+    if (vma->vm_start < start && end < vma->vm_end) {
+        struct VmaStruct *left_vma;
+        if ((left_vma = vma_create(vma->vm_start, start, vma->vm_flags)) == NULL) {
+            return -E_NO_MEM;
+        }
+        // 解除[start, end)的映射，将vma拆成了[vma->start, start)和[end, vma->end)
+        // 将vma范围缩小为[end, vma->vm_end)
+        vma_resize(vma, end, vma->vm_end);
+        insert_vma_struct(mm, left_vma);
+        // 将[start, end)的范围内映射的page释放掉
+        unmap_range(mm->page_dir, start, end);
+        return 0;
+    }
 
-// // 释放[start, end)虚拟地址范围内映射的物理页
-// static void unmap_range(struct MmStruct *mm, uintptr_t start, uintptr_t end) {
+    list_entry_t free_list, *entry;
+    list_init(&free_list);
+    // vma->vm_start < end那么[start, end)和[vma->vm_start, vma->vm_end)一定有交叉
+    while (vma->vm_start < end) {
+        entry = list_next(&(vma->vma_link));
+        // 将vma从mm的链表和红黑树上摘下来
+        remove_vma_struct(mm, vma);
+        list_add(&free_list, &(vma->vma_link));
+        if (entry == &(mm->mmap_link)) {
+            break;
+        }
+        vma = le2vma(entry, vma_link);
+    }
 
-// }
+    entry = list_next(&free_list);
+    while (entry != &free_list) {
+        vma = le2vma(entry, vma_link);
+        entry = list_next(entry);
+        uintptr_t un_start, un_end;
+        if (vma->vm_start < start) {
+            un_start = start;
+            un_end = vma->vm_end;
+            vma_resize(vma, vma->vm_start, un_start);
+            insert_vma_struct(mm, vma);
+        } else {
+            un_start = vma->vm_start;
+            un_end = vma->vm_end;
+            if (un_end <= end) {
+                vma_destory(vma);
+            } else {
+                un_end = end;
+                vma_resize(vma, end, vma->vm_end);
+                insert_vma_struct(mm, vma);
+            }
+        }
+        unmap_range(mm->page_dir, un_start, un_end);
+    }
+}
+
 
 static void check_vmm(void) {
     size_t nr_free_pages_store = nr_free_pages();

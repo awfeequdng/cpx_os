@@ -10,6 +10,7 @@
 #include <error.h>
 #include <string.h>
 #include <stdio.h>
+#include <swap.h>
 
 
 static struct SegDesc gdt[] = {
@@ -309,14 +310,28 @@ struct Page *get_page(pde_t *pgdir, uintptr_t va, pte_t **ptep_store) {
     return NULL;
 }
 
-static inline void page_remove_pte(pde_t *pgdir, uintptr_t va, pte_t *ptep) {
+inline void page_remove_pte(pde_t *pgdir, uintptr_t va, pte_t *ptep) {
     if (*ptep & PTE_P) {
         struct Page *page = pte2page(*ptep);
-        if (page_ref_dec(page) == 0) {
-            free_page(page);
+        
+        if (!PageSwap(page)) {
+            // page 没有放入swap中，所以在page引用计数为0时直接释放page
+            if (page_ref_dec(page) == 0) {
+                free_page(page);
+            }
+        } else {
+            // page被swap框架的链表中，只递减page引用计数，不释放page
+            // page的释放可由swap管理框架来做
+            if (*ptep & PTE_D) {
+                SetPageDirty(page);
+            }
+            page_ref_dec(page);
         }
         *ptep = 0;
         tlb_invalidate(pgdir, va);
+    } else if (*ptep != 0) {
+        swap_remove_entry(*ptep);
+        *ptep = 0;
     }
 }
 
