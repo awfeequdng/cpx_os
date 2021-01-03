@@ -10,7 +10,8 @@ KERNEL_INC += kernel/driver \
 			  kernel/init \
 			  kernel/mm \
 			  kernel/lib \
-			  kernel/sync
+			  kernel/sync \
+			  kernel/fs
 
 KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/trap/trap.c \
@@ -31,13 +32,17 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/mm/buddy_pmm.c \
 		kernel/mm/slab.c \
 		kernel/mm/vmm.c \
-		kernel/lib/rbtree.c
+		kernel/lib/rbtree.c \
+		kernel/driver/ide.c \
+		kernel/fs/swapfs.c \
+		kernel/mm/swap.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \
 		lib/printfmt.c \
 		lib/readline.c \
-		lib/rand.c
+		lib/rand.c \
+		lib/hash.c
 
 
 # 只替换%.c -> %.o, 没有匹配的保持不变

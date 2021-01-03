@@ -32,6 +32,7 @@ typedef int32_t off_t;
 
 typedef uint32_t pte_t;
 typedef uint32_t pde_t;
+typedef pte_t swap_entry_t;
 
 #define MIN(_a, _b) 	\
 ({			\

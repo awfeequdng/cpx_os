@@ -1,5 +1,6 @@
 
 #include <string.h>
+#include <x86.h>
 
 #define ASM 1
 
@@ -143,6 +144,19 @@ void *memmove(void *dst, const void *src, size_t n)
 	return dst;
 }
 #endif
+
+void * memcpy(void *dst, const void *src, size_t n) {
+#ifdef __HAVE_ARCH_MEMCPY
+    return __memcpy(dst, src, n);
+#else
+    const char *s = src;
+    char *d = dst;
+    while (n -- > 0) {
+        *d ++ = *s ++;
+    }
+    return dst;
+#endif /* __HAVE_ARCH_MEMCPY */
+}
 
 int strcmp(const char *p, const char *q)
 {

@@ -5,6 +5,7 @@ enum {
 	// kernel error codes -- keep in sync with list in lib/printfmt.c
 	E_INVAL	,	// invalid parameter
 	E_NO_MEM,
+	E_SWAP_FAULT,
 	
 	MAX_ERROR
 };

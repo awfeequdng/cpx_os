@@ -161,6 +161,10 @@ static void trap_dispatch(struct TrapFrame *tf) {
 			c = console_getc();
 			printk("kbd [%03d] %c\n", c, c);
 			break;
+		case IRQ_OFFSET + IRQ_IDE1:
+    	case IRQ_OFFSET + IRQ_IDE2:
+        	/* do nothing */
+        	break;
 		default:
 			// 中断是在内核态产生的，这是一个错误（why？）, todo:
 			if ((tf->tf_cs & 3) == 0) {

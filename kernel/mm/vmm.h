@@ -36,6 +36,7 @@ struct MmStruct {
     struct VmaStruct *mmap_cache;
     pde_t *page_dir;
     int map_count;
+    uintptr_t swap_address;
 };
 
 // 當節點數量大於32時，採用紅黑樹將vma鏈接起來
@@ -52,5 +53,6 @@ void vmm_init(void);
 
 int do_page_fault(struct MmStruct *m, uint32_t error_code, uintptr_t addr);
 
+void print_vma(void);
 
 #endif // __KERNEL_MM_VMM_H__

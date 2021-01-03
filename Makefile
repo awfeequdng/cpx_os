@@ -39,7 +39,7 @@ OBJDUMP = $(COMPILE_PREFIX)objdump
 NM	= $(COMPILE_PREFIX)nm
 
 # 编译选项详情见：https://zhuanlan.zhihu.com/p/316007378
-CFLAGS := $(CFLAGS) -fno-builtin -m32 -O2
+CFLAGS := $(CFLAGS) -fno-builtin -m32 -O0
 CFLAGS += -static -std=gnu99
 CFLAGS += -fno-omit-frame-pointer -Wall -MD 
 # 不需要位置无关代码
@@ -68,8 +68,9 @@ IMAGES = $(OBJ_DIR)/kernel/cpx_os
 IMAGES_TMP = $(IMAGES)~
 KERNEL = $(OBJ_DIR)/kernel/kernel
 BOOT = $(OBJ_DIR)/boot/boot
+SWAPIMG = $(OBJ_DIR)/swap.img
 
-all: $(IMAGES)
+all: $(IMAGES) $(SWAPIMG)
 
 $(IMAGES): $(KERNEL) $(BOOT)
 	@echo + mk $@
@@ -77,6 +78,9 @@ $(IMAGES): $(KERNEL) $(BOOT)
 	$(V)dd if=$(BOOT) of=$(IMAGES_TMP) conv=notrunc 2>/dev/null
 	$(V)dd if=$(KERNEL) of=$(IMAGES_TMP) seek=1 conv=notrunc 2>/dev/null
 	$(V)mv $(IMAGES_TMP)  $(IMAGES)
+
+$(SWAPIMG):
+	$(V)dd if=/dev/zero of=$@ bs=1M count=128
 
 include boot/Makefile.inc
 include kernel/Makefile.inc
@@ -86,6 +90,7 @@ GDB_PORT = $(shell expr `id -u` % 5000 + 25000)
 
 # QEMUOPTS = -S -s -hda ./$(IMAGES) -monitor stdio 
 QEMUOPTS = -drive file=$(IMAGES),index=0,media=disk,format=raw -serial mon:stdio -gdb tcp::$(GDB_PORT)
+QEMUOPTS += -drive file=$(SWAPIMG),index=1,media=disk,format=raw,cache=writeback
 #QEMUOPTS = -drive file=$(IMAGES),index=0,media=disk,format=raw -gdb tcp::$(GDB_PORT)
 
 .gdbinit: .gdbinit.tmp
@@ -99,23 +104,23 @@ pre-qemu: .gdbinit
 
 
 
-qemu: $(IMAGES) pre-qemu
+qemu: $(IMAGES) $(SWAPIMG) pre-qemu
 	$(QEMU)  $(QEMUOPTS)
 
-qemu-nox: $(IMAGES) pre-qemu
+qemu-nox: $(IMAGES) $(SWAPIMG) pre-qemu
 	@echo "***"
 	@echo "*** Use Ctrl-a x to exit qemu"
 	@echo "***"
 	$(QEMU) -nographic  $(QEMUOPTS)
 
-qemu-gdb: $(IMAGES) pre-qemu
+qemu-gdb: $(IMAGES) $(SWAPIMG) pre-qemu
 	@echo "***"
 	@echo "*** Now run 'make gdb'." 1>&2
 	@echo "***"
 	# 通过qemu的 -S -s参数让qemu启动内核后不执行，然后通过gdb进行调试
 	$(QEMU) $(QEMUOPTS) -S
 
-qemu-nox-gdb: $(IMAGES) pre-qemu
+qemu-nox-gdb: $(IMAGES) $(SWAPIMG) pre-qemu
 	@echo "***"
 	@echo "*** Now run 'make gdb'." 1>&2
 	@echo "***"
@@ -123,7 +128,7 @@ qemu-nox-gdb: $(IMAGES) pre-qemu
 	$(QEMU) -nographic $(QEMUOPTS) -S
 
 TERMINAL := gnome-terminal
-debug: $(IMAGES) pre-qemu
+debug: $(IMAGES) $(SWAPIMG) pre-qemu
 	$(V)$(QEMU) -S -s $(QEMUOPTS) &
 	$(V)sleep 2
 	$(V)$(TERMINAL) -e "gdb -n -x .gdbinit"

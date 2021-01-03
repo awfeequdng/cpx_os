@@ -64,12 +64,17 @@ struct Page {
     unsigned int property;          // # of pages in continuous memory block
     int zone_num;                   // used in buddy system, the No. of zone which the page belongs to
     list_entry_t page_link;         // free list link
+    swap_entry_t index;
+    list_entry_t swap_link;
 };
 
 /* Flags describing the status of a page frame */
 #define PG_reserved                 0       // the page descriptor is reserved for kernel or unusable
 #define PG_property                 1       // the member 'property' is valid
 #define PG_slab                     2       // page frame is included in a slab
+#define PG_dirty                    3       // page被修改了
+#define PG_swap                     4       // 
+#define PG_active                   5       // page 被放在了active链表上
 
 #define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
 #define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
@@ -80,6 +85,16 @@ struct Page {
 #define SetPageSlab(page)           set_bit(PG_slab, &((page)->flags))
 #define ClearPageSlab(page)         clear_bit(PG_slab, &((page)->flags))
 #define PageSlab(page)              test_bit(PG_slab, &((page)->flags))
+#define SetPageDirty(page)          set_bit(PG_dirty, &((page)->flags))
+#define ClearPageDirty(page)        clear_bit(PG_dirty, &((page)->flags))
+#define PageDirty(page)             test_bit(PG_dirty, &((page)->flags))
+#define SetPageSwap(page)           set_bit(PG_swap, &((page)->flags))
+#define ClearPageSwap(page)         clear_bit(PG_swap, &((page)->flags))
+#define PageSwap(page)              test_bit(PG_swap, &((page)->flags))
+#define SetPageActive(page)         set_bit(PG_active, &((page)->flags))
+#define ClearPageActive(page)       clear_bit(PG_active, &((page)->flags))
+#define PageActive(page)            test_bit(PG_active, &((page)->flags))
+
 
 #define le2page(le, member)         \
     container_of((le), struct Page, member)

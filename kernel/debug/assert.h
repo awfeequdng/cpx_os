@@ -17,7 +17,8 @@ void __panic(const char *file, int line, const char *fmt, ...) __attribute__((no
         }                                               \
     } while (0)
 
-// static_assert(x) will generate a compile-time error if 'x' is false.
+// static_assert(x) x等於false時，會在編譯時產生一個錯誤
+// 即static_assert这个关键字，用来做编译期间的断言，因此叫作静态断言
 #define static_assert(x)                                \
     switch (x) { case 0: case (x): ; }
 

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <buddy_pmm.h>
+#include <vmm.h>
 
 struct Command {
     const char *name;
@@ -16,6 +17,7 @@ static struct Command commands[] = {
     {"help", "Display this list of commands.", monitor_help},
     {"kernel_info", "Display information about the kernel.", monitor_kernel_info},
     {"buddy_info", "Display information about the buddy system.", monitor_buddy_info},
+    {"vma_info", "Display information about the vma of check_vma_struct.", monitor_vma_info},
 	// {"backtrace", "Print backtrace of stack frame.", monitor_backtrace},
 };
 
@@ -101,3 +103,7 @@ int monitor_backtrace(int argc, char **argv, struct TrapFrame *tf) {
     return 0;
 }
 
+int monitor_vma_info(int argc, char **argv, struct TrapFrame *tf) {
+    print_vma();
+    return 0;
+}

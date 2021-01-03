@@ -10,6 +10,8 @@
 #include <pmm.h>
 #include <slab.h>
 #include <vmm.h>
+#include <ide.h>
+#include <swap.h>
 
 void printk_test(void)
 {
@@ -78,10 +80,15 @@ void start_kernel(void)
 
 	vmm_init();
 
+	ide_init();
+
+	intr_enable();
+	
+	swap_init();
+
 	// clock_init();
 
 	// 开启总中断
-	intr_enable();
 
 	// panic("before monitor\n");
 

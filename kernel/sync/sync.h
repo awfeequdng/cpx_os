@@ -4,6 +4,8 @@
 #include <x86.h>
 #include <mmu.h>
 #include <intr.h>
+#include <assert.h>
+#include <atomic.h>
 
 static inline bool __intr_save(void) {
     if (read_eflags() & FL_IF) {
@@ -21,5 +23,25 @@ static inline void __intr_restore(bool flag) {
 
 #define local_intr_save(x)  do { x = __intr_save(); } while(0)
 #define local_intr_restore(x) __intr_restore(x)
+
+typedef volatile int lock_t;
+
+static inline void lock_init(lock_t *lock) {
+    *lock = 0;
+}
+
+static inline bool try_lock(lock_t *lock) {
+    return !test_and_set_bit(0, lock);
+}
+
+static inline void lock(lock_t *lock) {
+    while(!try_lock(lock));
+}
+
+static inline void unlock(lock_t *lock) {
+    if (!test_and_clear_bit(0, lock)) {
+        panic("Unlock failed.\n");
+    }
+}
 
 #endif //__KERNEL_SYNC_SYNC_H__

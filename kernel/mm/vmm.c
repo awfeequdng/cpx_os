@@ -5,6 +5,7 @@
 #include <slab.h>
 #include <sync.h>
 #include <error.h>
+#include <swap.h>
 
 static int vma_compare(rbtree_node_t *node1, rbtree_node_t *node2) {
     struct VmaStruct *vma1 = rbn2vma(node1, rb_link);
@@ -22,6 +23,7 @@ struct MmStruct *mm_create(void) {
         mm->page_dir = NULL;
         rbtree_init(&(mm->mmap_tree), rbtree_sentinel(), vma_compare);
         mm->map_count = 0;
+        mm->swap_address = 0;
     }
 
     return mm;
@@ -317,11 +319,47 @@ int do_page_fault(struct MmStruct *mm, uint32_t error_code, uintptr_t addr) {
     addr = ROUNDDOWN(addr, PAGE_SIZE);
     
     ret = -E_NO_MEM;
-    if (page_dir_alloc_page(mm->page_dir, addr, perm) == 0) {
+
+    pte_t *ptep = NULL;
+    if ((ptep = get_pte(mm->page_dir, addr, 1)) == NULL) {
         goto failed;
     }
+
+    if (*ptep == 0) {
+        // 如果页表项为0，表示即不存在和page的映射，也不存在和swap的映射
+        if (page_dir_alloc_page(mm->page_dir, addr, perm) == 0) {
+            goto failed;
+        }
+    } else {
+        // 页表项不为0，那么产生page fault的原因就可能是PTE_P没有置位，
+        // 但是存在swap entry，即pte的值就是swap entry值，
+        // 通过该swap entry找到page或者将数据换入进新的page
+        struct Page *page = NULL;
+        if ((ret = swap_in_page(*ptep, &page)) != 0) {
+            goto failed;
+        }
+        page_insert(mm->page_dir, page, addr, perm);
+        // 页表项pte不指向swap entry时，对应的swap entry引用计数减1
+        swap_decrease(page->index);
+    }
+
     ret = 0;
 
 failed:
     return ret;
+}
+
+void print_vma(void) {
+    if (check_mm_struct == NULL || check_mm_struct->map_count == 0) {
+        return;
+    }
+    struct VmaStruct *vma = NULL;
+    list_entry_t *head = &(check_mm_struct->mmap_link);
+    list_entry_t *entry = list_next(head);
+    while (entry != head) {
+        vma = le2vma(entry, vma_link);
+        printk("(start,end)=(%d,%d), flags=%08x \n", vma->vm_start, vma->vm_end, vma->vm_flags);
+        entry = list_next(entry);
+    }
+    
 }

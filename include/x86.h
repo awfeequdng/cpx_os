@@ -178,4 +178,23 @@ static inline uintptr_t rcr3(void) {
 	return cr3;
 }
 
+
+#ifndef __HAVE_ARCH_MEMCPY
+#define __HAVE_ARCH_MEMCPY
+static inline void *__memcpy(void *dst, const void *src, size_t n) {
+    int d0, d1, d2;
+    asm volatile (
+        "rep; movsl;"
+        "movl %4, %%ecx;"
+        "andl $3, %%ecx;"
+        "jz 1f;"
+        "rep; movsb;"
+        "1:"
+        : "=&c" (d0), "=&D" (d1), "=&S" (d2)
+        : "0" (n / 4), "g" (n), "1" (dst), "2" (src)
+        : "memory");
+    return dst;
+}
+#endif /* __HAVE_ARCH_MEMCPY */
+
 #endif // __INCLUDE_X86_H__
