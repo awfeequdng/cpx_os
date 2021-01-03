@@ -2,18 +2,15 @@
 #include <slab.h>
 #include <assert.h>
 
-// 所有的紅黑樹的sentinel都是用這個變量
-static rbtree_node_t sentinel;
-
-rbtree_node_t *rbtree_sentinel(void) {
-	return &sentinel;
+rbtree_node_t *rbtree_sentinel(rbtree_t *tree) {
+	return &(tree->sentinel);
 }
 
 rbtree_node_t *rbtree_root(rbtree_t *tree) {
 	if (tree != NULL) {
 		return tree->root;
 	}
-	return &sentinel;
+	return &(tree->sentinel);
 }
 
 void rbtree_left_rotate(rbtree_t *tree,
@@ -24,7 +21,7 @@ void rbtree_left_rotate(rbtree_t *tree,
 	rbtree_node_t *right_left = right->left;
 
 	right->parent = parent;
-	if (parent != tree->sentinel) {
+	if (parent != rbtree_sentinel(tree)) {
 		// node is not the tree root
 		if (parent->left == node) {
 			// node is left of parent
@@ -42,7 +39,7 @@ void rbtree_left_rotate(rbtree_t *tree,
 	node->parent = right;
 	
 	node->right = right_left;
-	if (right_left != tree->sentinel)
+	if (right_left != rbtree_sentinel(tree))
 		right_left->parent = node;
 }
 
@@ -52,7 +49,7 @@ void rbtree_right_rotate(rbtree_t *tree, rbtree_node_t *node) {
 	rbtree_node_t *left_right = left->right;
 
 	left->parent = parent;
-	if (parent != tree->sentinel) {
+	if (parent != rbtree_sentinel(tree)) {
 		// node is not the tree root
 		if (parent->left == node) {
 			parent->left = left;
@@ -68,19 +65,19 @@ void rbtree_right_rotate(rbtree_t *tree, rbtree_node_t *node) {
 	node->parent = left;
 
 	node->left = left_right;
-	if (left_right != tree->sentinel)
+	if (left_right != rbtree_sentinel(tree))
 		left_right->parent = node;
 }
 
 rbtree_node_t *rbtree_predecessor(rbtree_t *tree, rbtree_node_t *node) {
-	if (node->left != tree->sentinel) {
+	if (node->left != rbtree_sentinel(tree)) {
 		// 存在左孩子,那么node的前驱节点为左节点的最右节点
 		node = node->left;
-		while (node->right != tree->sentinel) {
+		while (node->right != rbtree_sentinel(tree)) {
 			node = node->right;
 		}
 		return node;
-	} else if (node->parent != tree->sentinel) {
+	} else if (node->parent != rbtree_sentinel(tree)) {
 		// node没有左孩子，此时父节点不为空，并且node为父节点的右孩子，
 		// 那么此时父节点就是node的前驱节点
 		if (node == node->parent->right) {
@@ -90,32 +87,32 @@ rbtree_node_t *rbtree_predecessor(rbtree_t *tree, rbtree_node_t *node) {
 			// 此时node的前驱节点为其向上查找的第一个具有如下特点的
 			// 祖先节点：node在这个祖先节点的右子树上。如果不存在这样的
 			// 祖先节点，说明node没有前驱节点。
-			while(node->parent != tree->sentinel) {
+			while(node->parent != rbtree_sentinel(tree)) {
 				if (node == node->parent->right) {
 					return node->parent;
 				}
 				node = node->parent;
 			}
-			return tree->sentinel;
+			return rbtree_sentinel(tree);
 		}
 	} 
 	// node既没有左孩子，也没有后继父节点
-	return tree->sentinel;
+	return rbtree_sentinel(tree);
 }
 
 rbtree_node_t *rbtree_successor(rbtree_t *tree, rbtree_node_t *node) {
 	// node存在右孩子，则右孩子的最左孩子即为node的后继
-	if (node->right != tree->sentinel) {
+	if (node->right != rbtree_sentinel(tree)) {
 		node = node->right;
-		while (node->left != tree->sentinel) {
+		while (node->left != rbtree_sentinel(tree)) {
 			node = node->left;
 		}
 		return node;
-	} else if (node->parent != tree->sentinel) {
+	} else if (node->parent != rbtree_sentinel(tree)) {
 		// node不存在右孩子，并且父亲节点不为空，那么node的后继节点是
 		// 第一个有如下特点的祖先节点：
 		// node在这个祖先节点的左子树上
-		while (node->parent != tree->sentinel) {
+		while (node->parent != rbtree_sentinel(tree)) {
 			if (node == node->parent->left) {
 				return node->parent;
 			}
@@ -123,7 +120,7 @@ rbtree_node_t *rbtree_successor(rbtree_t *tree, rbtree_node_t *node) {
 		}
 	}
 	// node既没有右孩子，也没有后继父节点
-	return tree->sentinel;
+	return rbtree_sentinel(tree);
 }
 
 static inline void rbtree_insert_fixup(rbtree_t *tree, rbtree_node_t *z) {
@@ -205,11 +202,11 @@ static inline void rbtree_insert_fixup(rbtree_t *tree, rbtree_node_t *z) {
 }
 
 void rbtree_insert(rbtree_t *tree, rbtree_node_t *z) {
-	rbtree_node_t *y = tree->sentinel;
+	rbtree_node_t *y = rbtree_sentinel(tree);
 	rbtree_node_t *x = tree->root;
 	// 找到key值第一个小于z->key的节点，
 	// 即y节点为小于z的最大节点，x为nil的节点
-	while (x != tree->sentinel) {
+	while (x != rbtree_sentinel(tree)) {
 		y = x;
 		if (tree->cmp_node(z, x) < 0) {
 			// z < x
@@ -218,10 +215,10 @@ void rbtree_insert(rbtree_t *tree, rbtree_node_t *z) {
 			x = x->right;
 		}
 	}
-	if (y == tree->sentinel) {
+	if (y == rbtree_sentinel(tree)) {
 		// 当前树为空
 		tree->root = z;
-		z->parent = tree->sentinel;
+		z->parent = rbtree_sentinel(tree);
 	} else if (tree->cmp_node(z, y) < 0) {
 		// z < y
 		y->left = z;
@@ -231,7 +228,7 @@ void rbtree_insert(rbtree_t *tree, rbtree_node_t *z) {
 		y->right = z;
 		z->parent = y;
 	}
-	z->left = z->right = tree->sentinel;
+	z->left = z->right = rbtree_sentinel(tree);
 	rbtree_red(z);
 	// 修复红黑树的性质
 	rbtree_insert_fixup(tree, z);
@@ -239,7 +236,7 @@ void rbtree_insert(rbtree_t *tree, rbtree_node_t *z) {
 
 // 用节点v替换节点u
 static void transplant(rbtree_t *tree, rbtree_node_t *u, rbtree_node_t *v) {
-	if (u->parent == tree->sentinel) {
+	if (u->parent == rbtree_sentinel(tree)) {
 		tree->root = v;
 	} else if (u == u->parent->left) {
 		// u为其父节点的左孩子
@@ -372,13 +369,13 @@ static inline void rbtree_delete_fixup(rbtree_t *tree, rbtree_node_t *x) {
 
 void rbtree_delete(rbtree_t *tree, rbtree_node_t *z) {
 	rbtree_node_t *y = z;
-	rbtree_node_t *x = tree->sentinel;
+	rbtree_node_t *x = rbtree_sentinel(tree);
 	unsigned y_original_color = y->color;
-	if (z->left == tree->sentinel) {
+	if (z->left == rbtree_sentinel(tree)) {
 		// z的右孩子代替z的位置
 		x = z->right;
 		transplant(tree, z, z->right);
-	} else if (z->right == tree->sentinel) {
+	} else if (z->right == rbtree_sentinel(tree)) {
 		// z的左孩子代替z的位置
 		x = z->left;
 		transplant(tree, z, z->left);
@@ -435,7 +432,7 @@ void get_rbtree_node_preorder(rbtree_node_t *node, rbtree_node_t *sentinel, int 
 int *get_rbtree_preorder(rbtree_t *tree, int size) {
 	int *arr = (int *)kmalloc(sizeof(int) * size);
 	int index = 0;
-	get_rbtree_node_preorder(tree->root, tree->sentinel, arr, &index);
+	get_rbtree_node_preorder(tree->root, rbtree_sentinel(tree), arr, &index);
 	return arr;
 }
 
@@ -478,11 +475,11 @@ static int key_struct_cmp(rbtree_node_t *node1, rbtree_node_t *node2) {
 
 void test_rbtree_rotate() {
 	rbtree_t tree;	
-	rbtree_init(&tree, &sentinel, key_struct_cmp);
+	rbtree_init(&tree, key_struct_cmp);
     key_struct_t node[6] = {{0}};
     
     tree.root = &(node[0].node);
-	rbtree_node_init(&(node[0].node), &sentinel);
+	rbtree_node_init(&(node[0].node), rbtree_sentinel(&tree));
 
     node[0].key = 0;
     node[0].node.left = &node[1];
@@ -496,20 +493,20 @@ void test_rbtree_rotate() {
     node[1].node.right = &node[4];
     node[3].node.parent = &node[1];
     node[4].node.parent = &node[1];
-    node[3].node.left = &sentinel;
-    node[3].node.right = &sentinel;
-    node[4].node.left = &sentinel;
-    node[4].node.right = &sentinel;
+    node[3].node.left = rbtree_sentinel(&tree);
+    node[3].node.right = rbtree_sentinel(&tree);
+    node[4].node.left = rbtree_sentinel(&tree);
+    node[4].node.right = rbtree_sentinel(&tree);
     node[3].key = 3;
     node[4].key = 4;
 
 
     node[2].node.left = &node[5];
-    node[2].node.right = &sentinel;
+    node[2].node.right = rbtree_sentinel(&tree);
     node[5].node.parent = &node[2];
     node[5].key = 5;
-    node[5].node.left = &sentinel;
-    node[5].node.right = &sentinel;	
+    node[5].node.left = rbtree_sentinel(&tree);
+    node[5].node.right = rbtree_sentinel(&tree);	
 
 
 	test_rbtree_left_rotate(&tree, tree.root);
@@ -523,7 +520,7 @@ void test_rbtree_rotate() {
 
 void test_rbtree_insert() {
 	rbtree_t tree;
-	rbtree_init(&tree, &sentinel, key_struct_cmp);
+	rbtree_init(&tree, key_struct_cmp);
 
 	key_struct_t nodes[6] = {{0}};
 	for (int i = 0; i < 6; i++) {
@@ -536,7 +533,7 @@ void test_rbtree_insert() {
 
 void test_rbtree_delete() {
 	rbtree_t tree;
-    rbtree_init(&tree, &sentinel, key_struct_cmp);
+    rbtree_init(&tree, key_struct_cmp);
 
     key_struct_t nodes[6] = {{0}};
     for (int i = 0; i < 6; i++) {

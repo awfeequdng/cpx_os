@@ -491,14 +491,18 @@ static int swap_out_vma(struct MmStruct *mm, struct VmaStruct *vma, uintptr_t ad
             // 用户态地址申请的页都不是保留页
             // 内核态地址映射的页都是保留页
             assert(!PageReserved(page));
+
+            // 时钟（clock）页置换算法：
+            // 第一遍将如果找到置位了PTE_A的pte，则将PTE_A位清除，然后查找下一个pte
             if (*ptep & PTE_A) {
                 // page最近被访问了，不能将该页换出，此时将访问标志清零
                 *ptep &= ~PTE_A;
                 tlb_invalidate(mm->page_dir, addr);
                 goto try_next_entry;
             }
+            // PTE_A没有置位
             if (!PageSwap(page)) {
-                // page还没有放入swap管理框架中，给page申请一个swap分区的映射，
+                // page还没有放入swap管理框架中（也就是目前没有该page的pte指向swap entry），给page申请一个swap分区的映射，
                 // 然后将page放入swap的hash_list中
                 if (!swap_page_add(page, 0)) {
                     // 放入swap管理框架失败，主要是申请不到swap的索引了（可能是swap分区的空间都被用掉了）
@@ -983,4 +987,29 @@ void check_swap(void) {
     assert(slab_allocated_store == slab_allocated());
 
     printk("check_swap() succeeded.\n");
+}
+
+static void check_mm_swap(void) {
+    size_t nr_free_pages_store = nr_free_pages();
+    size_t slab_allocated_store = slab_allocated();
+
+    int ret, i, j;
+    for (i = 0; i < max_swap_offset; i++) {
+        assert(mem_map[i] == SWAP_UNUSED);
+    }
+
+    extern struct MmStruct *check_mm_struct;
+    assert(check_mm_struct == NULL);
+
+    // step1: check mm_map
+
+    struct MmStruct *mm0 = mm_create(), *mm1;
+    assert(mm0 != NULL && list_empty(&(mm0->mmap_link)));  
+
+    uintptr_t addr0, addr1;
+
+    addr0 = 0;
+    do {
+        // ret = mm_map()
+    } while (addr0 != 0);
 }

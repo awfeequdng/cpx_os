@@ -17,21 +17,20 @@ typedef int (*rbtree_cmp_node_fp) (rbtree_node_t *node1, rbtree_node_t *node2);
 
 typedef struct {
 	rbtree_node_t 		*root;
-	rbtree_node_t		*sentinel;
+	rbtree_node_t		sentinel;
 	rbtree_cmp_node_fp	cmp_node;
 } rbtree_t;
 
-#define rbtree_init(tree, s, cmp)		\
-	do {										\
-		rbtree_node_t *__sentinel = (s);	\
-		rbtree_sentinel_init(__sentinel);		\
+#define rbtree_init(tree, cmp)								\
+	do {													\
+		rbtree_node_t *__sentinel = &((tree)->sentinel);	\
+		rbtree_sentinel_init(__sentinel);			\
 		(tree)->root = (__sentinel);				\
-		(tree)->sentinel = (__sentinel);			\
 		(tree)->cmp_node = (cmp);					\
 	} while (0)
 
 
-rbtree_node_t *rbtree_sentinel(void);
+rbtree_node_t *rbtree_sentinel(rbtree_t *tree);
 rbtree_node_t *rbtree_root(rbtree_t *tree);
 
 void rbtree_insert(rbtree_t *tree, rbtree_node_t *node);

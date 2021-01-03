@@ -21,7 +21,7 @@ struct MmStruct *mm_create(void) {
         list_init(&(mm->mmap_link));
         mm->mmap_cache = NULL;
         mm->page_dir = NULL;
-        rbtree_init(&(mm->mmap_tree), rbtree_sentinel(), vma_compare);
+        rbtree_init(&(mm->mmap_tree), vma_compare);
         mm->map_count = 0;
         mm->swap_address = 0;
     }
@@ -35,7 +35,7 @@ struct VmaStruct *vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_f
         vma->vm_start = vm_start;
         vma->vm_end = vm_end;
         vma->vm_flags = vm_flags;
-        rbtree_node_init(&(vma->rb_link), rbtree_sentinel());
+        // rbtree_node_init(&(vma->rb_link), rbtree_sentinel(tree));
         list_init(&(vma->vma_link));
     }
     return vma;
@@ -46,7 +46,7 @@ static inline struct VmaStruct *find_vma_rb(rbtree_t *tree, uintptr_t addr) {
     rbtree_node_t *node = rbtree_root(tree);
     struct VmaStruct *tmp = NULL;
     struct VmaStruct *vma = NULL;
-    while (node  != rbtree_sentinel()) {
+    while (node  != rbtree_sentinel(tree)) {
         tmp = rbn2vma(node, rb_link);
         if (tmp->vm_end > addr) {
             // vma爲addr右邊第一個出現的vma，包括addr在vma的地址範圍內
@@ -69,7 +69,7 @@ struct VmaStruct *find_vma(struct MmStruct *mm, uintptr_t addr) {
         vma = mm->mmap_cache;
         if (!(vma != NULL && vma->vm_start <= addr && vma->vm_end > addr)) {
             // 紅黑樹非空
-            if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel()) {
+            if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
                 vma = find_vma_rb(&(mm->mmap_tree), addr);
             } else {
                 bool found = 0;
@@ -108,7 +108,7 @@ static inline void insert_vma_rb(rbtree_t *tree, struct VmaStruct *vma, struct V
     rbtree_insert(tree, node);
     if (vma_prevp != NULL) {
         prev = rbtree_predecessor(tree, node);
-        if (prev != rbtree_sentinel()) {
+        if (prev != rbtree_sentinel(tree)) {
             *vma_prevp = rbn2vma(prev, rb_link);
         } else {
             *vma_prevp = NULL;
@@ -123,7 +123,7 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     list_entry_t *entry_next = NULL;
     list_entry_t *entry = NULL;
     
-    if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel()) {
+    if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
         struct VmaStruct *mmap_prev = NULL;
         insert_vma_rb(&(mm->mmap_tree), vma, &mmap_prev);
         if (mmap_prev != NULL) {
@@ -155,7 +155,7 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
 
     mm->map_count++;
 
-    if (rbtree_root(&mm->mmap_tree) == rbtree_sentinel() &&
+    if (rbtree_root(&(mm->mmap_tree)) == rbtree_sentinel(&(mm->mmap_tree)) &&
         mm->map_count >= RB_MIN_MAP_COUNT) {
         head = &(mm->mmap_link);
         entry = head;
@@ -164,6 +164,11 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
         }
     }
 }
+
+// static int remove_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
+//     assert(mm == vma->vm_mm);
+//     if (mm->mmap_tree != )
+// }
 
 void mm_destory(struct MmStruct *mm) {
     list_entry_t *head = &(mm->mmap_link);
@@ -182,6 +187,88 @@ static void check_page_fault();
 void vmm_init(void) {
     check_vmm();
 }
+
+// 从[addr, addr + len)建立一个vma映射
+int mm_map(struct MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
+         struct VmaStruct **vma_store) {
+    uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
+    uintptr_t end = ROUNDUP(addr + len, PAGE_SIZE);
+    if (!USER_ACCESS(start, end)) {
+        return -E_INVAL;
+    }
+
+    assert (mm != NULL);
+
+    int ret = -E_INVAL;
+    struct VmaStruct *vma;
+    if ((vma = find_vma(mm, start)) != NULL && end > vma->vm_start) {
+        // 如果找到的地址范围[start， end)和存在vma地址范围重叠，则直接退出，返回失败
+        goto out;
+    }
+    ret = -E_NO_MEM;
+    if ((vma = vma_create(start, end, vm_flags)) == NULL) {
+        goto out;
+    }
+    // 将刚创建的vma加入mm
+    insert_vma_struct(mm, vma);
+    if (vma_store != NULL) {
+        *vma_store = vma;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static void vma_resize(struct VmaStruct *vma, uintptr_t start, uintptr_t end) {
+    assert(start % PAGE_SIZE == 0 && end % PAGE_SIZE == 0);
+    // 调整vma大小时，只能缩小范围
+    assert(vma->vm_start <= start && start < end && vma->vm_end >= end);
+    vma->vm_start = start;
+    vma->vm_end = end;
+}
+
+// int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len) {
+//     uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
+//     uintptr_t end = ROUNDUP(start + len, PAGE_SIZE);
+//     if (!USER_ACCESS(start, end)) {
+//         return -E_INVAL;
+//     }
+//     assert(mm != NULL);
+
+//     struct VmaStruct *vma;
+//     if ((vma = find_vma(mm, start)) == NULL || end <= vma->vm_start) {
+//         // 没有找到addr对应的vma
+//         return 0;
+//     }
+//     // 如果[start, end)在vma的地址范围内，则将vma分成左边界和右边界两个vma
+//     if (vma->vm_start < start && end < vma->vm_end) {
+//         struct VmaStruct *left_vma;
+//         if ((left_vma = vma_create(vma->vm_start, start, vma->vm_flags)) == NULL) {
+//             return -E_NO_MEM;
+//         }
+//         // 解除[start, end)的映射，将vma拆成了[vma->start, start)和[end, vma->end)
+//         // 将vma范围缩小为[end, vma->vm_end)
+//         vma_resize(vma, end, vma->vm_end);
+//         insert_vma_struct(mm, left_vma);
+//         // 将[start, end)的范围内映射的page释放掉
+//         unmap_range(mm->page_dir, start, end);
+//         return 0;
+//     }
+
+//     list_entry_t free_list, *entry;
+//     list_init(&free_list);
+//     // vma->vm_start < end那么[start, end)和[vma->vm_start, vma->vm_end)一定有交叉
+//     while (vma->vm_start < end) {
+//         entry = list_next(&(vma->vma_link));
+//         remove_vma_struct(mm, vma);
+//     }
+
+// }
+
+// // 释放[start, end)虚拟地址范围内映射的物理页
+// static void unmap_range(struct MmStruct *mm, uintptr_t start, uintptr_t end) {
+
+// }
 
 static void check_vmm(void) {
     size_t nr_free_pages_store = nr_free_pages();
@@ -363,3 +450,4 @@ void print_vma(void) {
     }
     
 }
+

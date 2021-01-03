@@ -7,6 +7,19 @@
 #define KERNEL_MEM_SIZE 0x38000000
 #define KERNEL_TOP      (KERNEL_BASE + KERNEL_MEM_SIZE)
 
+#define USER_TOP        0xB0000000
+
+#define USER_BASE       0x00200000
+
+// [start, end)
+#define USER_ACCESS(start, end)     \
+    (USER_BASE <= (start) && (start) < (end) && (end) <= USER_TOP)
+
+// [start, end)
+#define KERNEL_ACCESS(start, end)   \
+    (KERNEL_BASE <= (start) && (start) < (end) && (end) <= KERNEL_TOP)
+
+// 通过该地址访问内核页目录和页表
 #define VPT     0xFAC00000
 
 // #define K_STACK_TOP  KERNEL_BASE
