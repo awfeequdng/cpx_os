@@ -35,7 +35,8 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/lib/rbtree.c \
 		kernel/driver/ide.c \
 		kernel/fs/swapfs.c \
-		kernel/mm/swap.c
+		kernel/mm/swap.c \
+		kernel/mm/shmem.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \

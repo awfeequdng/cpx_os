@@ -6,6 +6,7 @@
 #include <memlayout.h>
 #include <sync.h>
 #include <rbtree.h>
+#include <shmem.h>
 
 struct MmStruct;
 
@@ -14,10 +15,11 @@ struct VmaStruct {
     // [start, end)
     uintptr_t vm_start;
     uintptr_t vm_end;
-
     uint32_t vm_flags;
     rbtree_node_t rb_link;
     list_entry_t vma_link;
+    ShareMemory *shmem;
+    size_t shmem_off;
 };
 
 #define le2vma(le, member)  \
@@ -29,6 +31,8 @@ struct VmaStruct {
 #define VM_READ         0x00000001
 #define VM_WRITE        0x00000002
 #define VM_EXEC         0x00000004
+#define VM_STACK        0x00000008
+#define VM_SHARE        0x00000010
 
 struct MmStruct {
     list_entry_t mmap_link;

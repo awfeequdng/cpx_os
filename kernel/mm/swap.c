@@ -8,6 +8,7 @@
 #include <swapfs.h>
 #include <string.h>
 #include <mmu.h>
+#include <shmem.h>
 
 size_t max_swap_offset;
 
@@ -75,6 +76,7 @@ static inline void swap_list_del(struct Page *page) {
 }
 void check_swap(void);
 static void check_mm_swap(void);
+static void check_mm_shmem_swap(void);
 
 void swap_init(void) {
     swapfs_init();
@@ -101,6 +103,7 @@ void swap_init(void) {
 
     check_swap();
     check_mm_swap();
+    check_mm_shmem_swap();
 }
 
 bool try_free_pages(size_t n) {
@@ -413,7 +416,8 @@ static int page_launder(void) {
         // 如果page在swap分区没有副本，则直接将page释放（这个函数只释放swap的entry对应的swap frame）
         // 如果page在swap分区有副本，则将page写入swap分区
         if (!try_free_swap_entry(entry)) {
-            // page在swap分区有副本，不能释放这个swap的entry
+            // 存在页表项pte指向swap entry,不能释放这个swap的entry，以swap entry映射的page是脏页的话，就将该page写入swap分区
+            // 如果page不为脏，直接
             if (PageDirty(page)) {
                 // page的内容已经被修改，则需要写入swap分区
                 ClearPageDirty(page);
@@ -520,7 +524,7 @@ static int swap_out_vma(struct MmStruct *mm, struct VmaStruct *vma, uintptr_t ad
                 SetPageDirty(page);
             }
             swap_entry_t entry = page->index;
-            // 为什么要给entry的引用加1？
+            // 现在多了一个pte引用这个swap entry，所以引用计数加1
             swap_duplicate(entry);
             // page被驱逐到swap管理框架了，少了一个pte引用该page，因此将page的引用计数减1
             page_ref_dec(page);
@@ -1306,4 +1310,59 @@ static void check_mm_swap(void) {
     assert(slab_allocated_store == slab_allocated());
 
     printk("check_mm_swap successed\n");
+}
+
+static void check_mm_shmem_swap(void) {
+    size_t nr_free_pages_store = nr_free_pages();
+    size_t slab_allocated_store = slab_allocated();
+
+    int ret, i;
+    for (i = 0; i < max_swap_offset; i++) {
+        assert(mem_map[i] == SWAP_UNUSED);
+    }
+
+    extern struct MmStruct *check_mm_struct;
+    assert(check_mm_struct == NULL);
+
+    struct MmStruct *mm0 = mm_create();
+    struct MmStruct *mm1 = NULL;
+
+    assert(mm0 != NULL && list_empty(&(mm0->mmap_link)));
+
+    struct Page *page = alloc_page();
+    assert(page != NULL);
+    pde_t *page_dir = page2kva(page);
+    memcpy(page_dir, get_boot_page_dir(), PAGE_SIZE);
+    page_dir[PDX(VPT)] = PADDR(page_dir) | PTE_P | PTE_W;
+
+    mm0->page_dir = page_dir;
+    check_mm_struct = mm0;
+    lcr3(PADDR(mm0->page_dir));
+
+    uint32_t vm_flags = VM_WRITE | VM_READ;
+    uintptr_t addr0, addr1;
+
+    addr0 = 0;
+    do {
+        if ((ret = mm_map(mm0, addr0, PT_SIZE * 4, vm_flags, NULL)) == 0) {
+            break;
+        }
+        addr0 += PT_SIZE;
+    } while (addr0 != 0);
+
+    assert(ret == 0 && addr0 != 0 && mm0->map_count == 1);
+
+    ret = mm_unmap(mm0, addr0, PT_SIZE * 4);
+    assert(ret == 0 && mm0->map_count == 0);
+
+    ShareMemory *shmem = shmem_create(PT_SIZE * 2);
+    assert(shmem != NULL && shmem_ref(shmem) == 0);
+
+    // step1: check share memory
+
+    struct VmaStruct *vma;
+
+    addr1 = addr0 + PT_SIZE * 2;
+
+    printk("check_mm_shmem_swap successed\n");
 }
