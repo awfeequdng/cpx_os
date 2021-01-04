@@ -116,6 +116,8 @@ static inline void insert_vma_rb(rbtree_t *tree, struct VmaStruct *vma, struct V
     }
 }
 
+// 插入新的vma时，即使两个vma相邻，并且vm_flags也相同，也没有将两个vma合并
+// todo: 此处有必要做一下优化，将相邻的并且属性相同的vma合并
 void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     assert(vma->vm_start < vma->vm_end);
     list_entry_t *head = &(mm->mmap_link);
@@ -179,6 +181,8 @@ static int remove_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
 }
 
 void mm_destory(struct MmStruct *mm) {
+    // if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
+    // }
     list_entry_t *head = &(mm->mmap_link);
     list_entry_t *entry = head;
     while ((entry = list_next(entry)) != head) {
@@ -217,10 +221,12 @@ int mm_map(struct MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
         // 如果找到的地址范围[start， end)和存在vma地址范围重叠，则直接退出，返回失败
         goto out;
     }
+
     ret = -E_NO_MEM;
     if ((vma = vma_create(start, end, vm_flags)) == NULL) {
         goto out;
     }
+
     // 将刚创建的vma加入mm
     insert_vma_struct(mm, vma);
     if (vma_store != NULL) {
@@ -259,7 +265,7 @@ static void unmap_range(pte_t *page_dir, uintptr_t start, uintptr_t end) {
 
 int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len) {
     uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
-    uintptr_t end = ROUNDUP(start + len, PAGE_SIZE);
+    uintptr_t end = ROUNDUP(addr + len, PAGE_SIZE);
     if (!USER_ACCESS(start, end)) {
         return -E_INVAL;
     }
@@ -322,8 +328,102 @@ int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len) {
         }
         unmap_range(mm->page_dir, un_start, un_end);
     }
+    return 0;
 }
 
+// 删除物理页表
+void exit_range(pde_t *page_dir, uintptr_t start, uintptr_t end) {
+    assert(start % PAGE_SIZE == 0 && end % PAGE_SIZE == 0);
+    assert(USER_ACCESS(start, end));
+
+    start = ROUNDDOWN(start, PT_SIZE);
+    do {
+        int pde_idx = PDX(start);
+        if (page_dir[pde_idx] & PTE_P) {
+            free_page(pde2page(page_dir[pde_idx]));
+            page_dir[pde_idx] = 0;
+        }
+        start += PT_SIZE;
+    } while (start != 0 && start < end);
+}
+
+int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool share) {
+    assert(start % PAGE_SIZE == 0 && end % PAGE_SIZE == 0);
+    assert(USER_ACCESS(start, end));
+    // 目前share字段没有使用，默认采用非共享的方式赋值内存
+    do {
+        pte_t *ptep = get_pte(from, start, 0);
+        pte_t *new_ptep = NULL;
+        if (ptep == NULL) {
+            start = ROUNDDOWN(start + PT_SIZE, PT_SIZE);
+            continue;
+        }
+        if (*ptep != 0) {
+            if ((new_ptep = get_pte(to, start, 1)) == NULL) {
+                return -E_NO_MEM;
+            }
+            int ret;
+            struct Page *new_page = NULL;
+            assert(*ptep != 0 && *new_ptep == 0);
+            if (*ptep & PTE_P) {
+                // 为什么只设置PTE_USER一个标志，其他的标志不需要复制吗？
+                uint32_t perm = (*ptep & PTE_USER);
+                new_page = alloc_page();
+                if (new_page == NULL) {
+                    return -E_NO_MEM;
+                }
+                memcpy(page2kva(new_page), page2kva(pte2page(*ptep)), PAGE_SIZE);
+                ret = page_insert(to, new_page, start, perm);
+                assert(ret == 0);
+            } else {
+                // ptep指向swap entry
+                swap_entry_t entry;
+                if (swap_copy_entry(*ptep, &entry) != 0) {
+                    return -E_NO_MEM;
+                }
+                swap_duplicate(entry);
+                *new_ptep = entry;
+            }
+        }
+        start += PAGE_SIZE;
+    } while (start != 0 && start < end);
+    return 0;
+}
+
+int dup_mmap(struct MmStruct *to, struct MmStruct *from) {
+    assert(to != NULL && from != NULL);
+    list_entry_t *head = &(from->mmap_link);
+    list_entry_t *entry = head;
+    while ((entry = list_prev(entry)) != head) {
+        struct VmaStruct *vma = NULL, *new_vma = NULL;
+        vma = le2vma(entry, vma_link);
+        new_vma = vma_create(vma->vm_start, vma->vm_end, vma->vm_flags);
+        if (new_vma == NULL) {
+            return -E_NO_MEM;
+        }
+        insert_vma_struct(to, new_vma);
+        if (copy_range(to->page_dir, from->page_dir, vma->vm_start, vma->vm_end, false) != 0) {
+            return -E_NO_MEM;
+        }
+    }
+    return 0;
+}
+
+// 删除vma映射的物理页，以及所有页表，只留下一个页目录
+void exit_mmap(struct MmStruct *mm) {
+    assert(mm != NULL);
+    pde_t *page_dir = mm->page_dir;
+    list_entry_t *head = &(mm->mmap_link);
+    list_entry_t *entry = head;
+    while ((entry = list_next(entry)) != head) {
+        struct VmaStruct *vma = le2vma(entry, vma_link);
+        unmap_range(page_dir, vma->vm_start, vma->vm_end);
+    }
+    while ((entry = list_next(entry)) != head) {
+        struct VmaStruct *vma = le2vma(entry, vma_link);
+        exit_range(page_dir, vma->vm_start, vma->vm_end);
+    }
+}
 
 static void check_vmm(void) {
     size_t nr_free_pages_store = nr_free_pages();
@@ -500,7 +600,7 @@ void print_vma(void) {
     list_entry_t *entry = list_next(head);
     while (entry != head) {
         vma = le2vma(entry, vma_link);
-        printk("(start,end)=(%d,%d), flags=%08x \n", vma->vm_start, vma->vm_end, vma->vm_flags);
+        printk("(start,end)=(%08x,%08x), flags=%08x \n", vma->vm_start, vma->vm_end, vma->vm_flags);
         entry = list_next(entry);
     }
     

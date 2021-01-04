@@ -7,6 +7,7 @@
 #include <error.h>
 #include <swapfs.h>
 #include <string.h>
+#include <mmu.h>
 
 size_t max_swap_offset;
 
@@ -73,6 +74,7 @@ static inline void swap_list_del(struct Page *page) {
     list_del(&(page->swap_link));
 }
 void check_swap(void);
+static void check_mm_swap(void);
 
 void swap_init(void) {
     swapfs_init();
@@ -98,6 +100,7 @@ void swap_init(void) {
     lock_init(&swap_in_lock);
 
     check_swap();
+    check_mm_swap();
 }
 
 bool try_free_pages(size_t n) {
@@ -472,7 +475,6 @@ static void refill_inactive_scan(void) {
 static int swap_out_vma(struct MmStruct *mm, struct VmaStruct *vma, uintptr_t addr, size_t require) {
     if (require == 0 || !(addr >= vma->vm_start && addr < vma->vm_end)) {
         // addr 不在vma的地址范围，不能释放这个vma的page
-        // todo: require == 0为何意？
         return 0;
     }
     uintptr_t end;
@@ -563,6 +565,9 @@ static int swap_out_mm(struct MmStruct *mm, size_t require) {
 
     int i;
     size_t free_count = 0;
+    // 由于起始地址swap_address可能在第一个vma的中间位置，导致第一次扫描时
+    // 只能扫描第一个vma的一半，如要将vma全部扫描完，需要增加一次对vma的扫描，
+    // 从而需要扫描的次数为mm->map_count + 1
     for (i = 0; i <= mm->map_count; i++) {
         int ret = swap_out_vma(mm, vma, addr, require);
         free_count += ret;
@@ -817,17 +822,22 @@ void check_swap(void) {
     // rp0已经从swap框架中移除了
     assert(!PageSwap(rp0));
 
+    assert(*ptep0 & PTE_A);
     // 当前vma只有一个rp0，并且这个rp0刚刚被访问了，此时PTE_A置位了
     // 所以对应的pte PTE_A标志被清除，并且rp0不会被驱逐
+
     ret = swap_out_mm(mm, 10);
     assert(ret == 0);
     // rp0用作0地址页表项的物理页，并且没有放入swap管理框架中
     assert(!PageSwap(rp0) && (*ptep0 & PTE_P));
-
+    
+    assert(!(*ptep0 & PTE_A));
     // change page table
     // rp0的 PTE_A标志没有置位了，因此可以被驱逐
     // 被驱逐后，page的引用计数为0，并且ptep0指向swap entry:1，即mem_map[1]计数为1
     ret = swap_out_mm(mm, 10);
+
+    assert(PageSwap(rp0) && (*ptep0 & PTE_P) == 0);
     assert(ret == 1);
     
     assert(*ptep0 == entry && page_ref(rp0) == 0 && mem_map[1] == 1);
@@ -1003,13 +1013,297 @@ static void check_mm_swap(void) {
 
     // step1: check mm_map
 
-    struct MmStruct *mm0 = mm_create(), *mm1;
+    struct MmStruct *mm0 = mm_create();
+    struct MmStruct *mm1 = NULL;
     assert(mm0 != NULL && list_empty(&(mm0->mmap_link)));  
 
     uintptr_t addr0, addr1;
 
     addr0 = 0;
     do {
-        // ret = mm_map()
+        ret = mm_map(mm0, addr0, PT_SIZE, 0, NULL);
+        assert(ret == ((USER_ACCESS(addr0, addr0 + PT_SIZE)) ? 0 : -E_INVAL));
+        addr0 += PT_SIZE;
     } while (addr0 != 0);
+
+    addr0 = 0;
+    for (i = 0; i < 1024; i++, addr0 += PT_SIZE) {
+        ret = mm_map(mm0, addr0, PAGE_SIZE, 0, NULL);
+        assert(ret == -E_INVAL);
+    }
+
+    mm_destory(mm0);
+
+    mm0 = mm_create();
+    assert(mm0 != NULL && list_empty(&(mm0->mmap_link)));
+
+    addr0 = 0;
+    i = 0;
+    do {
+        ret = mm_map(mm0, addr0, PT_SIZE - PAGE_SIZE, 0, NULL);
+        assert(ret == (USER_ACCESS(addr0, addr0 + PT_SIZE) ? 0 : -E_INVAL));
+        if (ret == 0) {
+            i++;
+        }
+        addr0 += PT_SIZE;
+    } while (addr0 != 0);
+
+    addr0 = 0;
+    j = 0;
+    do {
+        addr0 += PT_SIZE - PAGE_SIZE;
+        ret = mm_map(mm0, addr0, PAGE_SIZE, 0, NULL);
+        assert(ret == (USER_ACCESS(addr0, addr0 + PAGE_SIZE) ? 0 : -E_INVAL));
+        if (ret == 0) {
+            j++;
+        }
+        addr0 += PAGE_SIZE;
+    } while (addr0 != 0);
+    // addr0 = 0x00400000 - 0x00001000时这个地址是有效的user addr，因此j 比 i大1
+    assert(j >= i + 1);
+
+    mm_destory(mm0);
+
+    assert(nr_free_pages_store == nr_free_pages());
+    assert(slab_allocated_store == slab_allocated());
+
+    printk("check_mm_swap: step1, mm_map ok.\n");
+
+    // step: check page fault
+
+    mm0 = mm_create();
+    assert(mm0 != NULL && list_empty(&(mm0->mmap_link)));
+
+    // setup page table
+
+    struct Page *page = alloc_page();
+    assert(page != NULL);
+    pte_t *page_dir = page2kva(page);
+    memcpy(page_dir, get_boot_page_dir(), PAGE_SIZE);
+    // 通过VPT可以访问到页表
+    page_dir[PDX(VPT)] = PADDR(page_dir) | PTE_P | PTE_W;
+
+    mm0->page_dir = page_dir;
+    check_mm_struct = mm0;
+    lcr3(PADDR(mm0->page_dir));
+
+    uint32_t vm_flags = VM_WRITE | VM_READ;
+    struct VmaStruct *vma = NULL;
+    addr0 = 0;
+    do {
+        if ((ret = mm_map(mm0, addr0, PT_SIZE, vm_flags, &vma)) == 0) {
+            break;
+        }
+        addr0 += PT_SIZE;
+    } while (addr0 != 0);
+    printk("ret = %d, addr0 = %08x, map_count = %d\n", ret, addr0, mm0->map_count);
+    assert(ret == 0 && addr0 != 0 && mm0->map_count == 1);
+    assert(vma->vm_start == addr0 && vma->vm_end == addr0 + PT_SIZE);
+
+    // check pte entry
+    pte_t *ptep = NULL;
+    for (addr1 = addr0; addr1 < addr0 + PT_SIZE; addr1 += PAGE_SIZE) {
+        ptep = get_pte(page_dir, addr1, 0);
+        assert(ptep == NULL);
+    }
+
+    int free_count = nr_free_pages();
+    // 从addr0写入两个页，那么会首先申请一个页表，然后为两个页表项申请物理内存
+    // 所以如下的操作总共会申请三个页
+    memset((void*)addr0, 0xEF, PAGE_SIZE * 2);
+    assert(free_count - 3 == nr_free_pages());
+    ptep = get_pte(page_dir, addr0, 0);
+    assert(ptep != NULL && (*ptep & PTE_P));
+    ptep = get_pte(page_dir, addr0 + PAGE_SIZE, 0);
+    assert(ptep != NULL && (*ptep & PTE_P));
+
+    // 释放无效的地址范围，返回-E_INVAL
+    ret = mm_unmap(mm0, -PT_SIZE, PT_SIZE);
+    assert(ret == -E_INVAL);
+    // 这个地址范围内没有vma
+    ret = mm_unmap(mm0, addr0 + PT_SIZE, PT_SIZE);
+    assert(ret == 0);
+
+    addr1 = addr0 + PT_SIZE / 2;
+    // 当前vma的地址范围为[addr0, addr0 + PT_SIZE),且只有这一个vma
+    assert(mm0->map_count == 1);
+    // 而[addr1, addr1 + PAGE_SIZE)将这个vma分成了两段
+    ret = mm_unmap(mm0, addr1, PAGE_SIZE);
+    assert(ret == 0 && mm0->map_count == 2);
+
+    // 当前有两个vma，vma[addr0, addr1)和vma[addr1 + PAGE_SIZE, addr0 + PT_SIZE)
+    // 下面[addr1 + 2 * PAGE_SIZE, addr1 + PAGE_SIZE * 6)将以上第二个vma分成了两个vma，所以现在有三个vma
+    ret = mm_unmap(mm0, addr1 + 2 * PAGE_SIZE, PAGE_SIZE * 4);
+    assert(ret == 0 && mm0->map_count == 3);
+    // 当前存在vma[addr1 + PAGE_SIZE, addr1 + PAGE_SIZE * 2)，和下面这个函数映射地址重叠了，
+    // 因此下面这个映射申请会失败
+    ret = mm_map(mm0, addr1, PAGE_SIZE * 6, 0, NULL);
+    assert(ret == -E_INVAL);
+    // 当前还没有vma[addr1, addr1 + PAGE_SIZE)存在，可以申请映射
+    ret = mm_map(mm0, addr1, PAGE_SIZE, 0, NULL);
+    // 虽然存在vma[addr1 + PAGE_SIZE, addr1 + 2 * PAGE_SIZE]与
+    // vma[addr1, addr1 + PAGE_SIZE)相邻，但是他们的vm_flags属性值不一样，不能合并；
+    // vma[addr1 + PAGE_SIZE, addr1 + 2 * PAGE_SIZE]的属性值为VM_WRITE | VM_READ，
+    // 而vma[addr1, addr1 + PAGE_SIZE)的属性值为0
+    assert(ret == 0 && mm0->map_count == 4);
+    // 同样，新映射的vma地址可以成功，但不会与其他vma合并，这是由于相邻的vma的vma_flags属性值不一样
+    ret = mm_map(mm0, addr1 + 2 * PAGE_SIZE, PAGE_SIZE * 4, 0, NULL);
+    assert(ret == 0 && mm0->map_count == 5);
+    // 起始地址通过rounddown后为addr0 + PT_SIZE / 2,
+    // 终止地址通过roundup后为addr0 + PT_SIZE,
+    // 也就是将vma[addr1, addr1 + PT_SIZE / 2]释放掉
+    ret = mm_unmap(mm0, addr1 + PAGE_SIZE / 2, PT_SIZE / 2 - PAGE_SIZE);
+    assert(ret == 0 && mm0->map_count == 1);
+
+    addr1 = addr0 + PAGE_SIZE;
+    for (i = 0; i < PAGE_SIZE; i++) {
+        assert(*(char *)(addr1 + i) == (char)0xEF);
+    }
+
+    // 释放vma[addr0 + PAGE_SIZE, addr0 + PAGE_SIZE * 2)
+    // 这个范围内有映射物理页，将其映射的page释放
+    free_count = nr_free_pages();
+    ret = mm_unmap(mm0, addr1 + PAGE_SIZE / 2, PAGE_SIZE /4);
+    assert(ret == 0 && mm0->map_count == 2);
+    assert(free_count + 1 == nr_free_pages());
+
+    ptep = get_pte(page_dir, addr0, 0);
+    assert(ptep != NULL && (*ptep & PTE_P));
+    ptep = get_pte(page_dir, addr0 + PAGE_SIZE, 0);
+    assert(ptep != NULL && *ptep == 0);
+    
+    // 虽然当前插入的vma和其他vma相邻并且属性相同，但是没有实现将他们合并的功能
+    ret = mm_map(mm0, addr1, PAGE_SIZE, vm_flags, NULL);
+    memset((void *)addr1, 0x88, PAGE_SIZE);
+    // print_vma();
+    assert(*(char *)addr1 == (char)0x88 && mm0->map_count == 3);
+
+    for (i = 1; i < 16; i += 2) {
+        ret = mm_unmap(mm0, addr0 + PAGE_SIZE * i, PAGE_SIZE);
+        assert(ret == 0);
+        if (i < 8) {
+            ret == mm_map(mm0, addr0 + PAGE_SIZE * i, PAGE_SIZE, 0, NULL);
+            assert(ret == 0);
+        }
+    }
+    assert(mm0->map_count == 13);
+
+    ret = mm_unmap(mm0, addr0 + PAGE_SIZE * 2, PT_SIZE - PAGE_SIZE * 2);
+    assert(ret == 0 && mm0->map_count == 2);
+
+    ret = mm_unmap(mm0, addr0, PAGE_SIZE * 2);
+    assert(ret == 0 && mm0->map_count == 0);
+    printk("check_mm_swap: step2, mm_unmap ok.\n");
+
+    // step3: check exit_mmap
+    ret = mm_map(mm0, addr0, PT_SIZE, vm_flags, NULL);
+    assert(ret == 0);
+
+    // 下面的操作会申请四个页，来填充四个页表项
+    free_count = nr_free_pages();
+    for (i = 0, addr1 = addr0; i < 4; i++, addr1 += PAGE_SIZE) {
+        *(char *)addr1 = (char)0XFF;
+    }
+    assert(free_count - 4 == nr_free_pages());
+
+    exit_mmap(mm0);
+    for (i = 0; i < PDX(KERNEL_BASE); i++) {
+        assert(page_dir[i] == 0);
+    }
+    printk("check_mm_swap: step3, exit_unmap ok.\n");
+
+    // step4: check_dup_mmap
+    for (i = 0; i < max_swap_offset; i++) {
+        assert(mem_map[i] == SWAP_UNUSED);
+    }
+    
+    // 该地址step3已经添加了映射，因此映射请求会失败
+    ret = mm_map(mm0, addr0, PT_SIZE, vm_flags, NULL);
+    assert(ret != 0);
+    
+    free_count = nr_free_pages();
+    addr1 = addr0;
+    // 如下操作会申请一个页表，4个与页表项建立映射关系的page
+    // 总共会申请5个page
+    for (i =0; i < 4; i++, addr1 += PAGE_SIZE) {
+        *(char *)addr1 = (char)(i * i);
+    }
+    assert(free_count - 5 == nr_free_pages());
+    
+    ret = 0;
+    // swap_out_mm会循环扫描vma多达mm0->map_count + 1次，所以第一个vma的映射的page可在第一次执行swap_out_mm时被驱逐出去
+    ret += swap_out_mm(mm0, 10);
+    ret += swap_out_mm(mm0, 10);
+    assert(ret == 4);
+
+    free_count = nr_free_pages();
+    for (; i < 8; i++, addr1 += PAGE_SIZE) {
+        *(char *)addr1 = (char)(i * i);
+    }
+    assert(free_count - 4 == nr_free_pages());
+
+    // setup mm1
+    mm1 = mm_create();
+    assert(mm1 != NULL);
+
+    page = alloc_page();
+    assert(page != NULL);
+    page_dir = page2kva(page);
+    memcpy(page_dir, get_boot_page_dir(), PAGE_SIZE);
+    page_dir[PDX(VPT)] = PADDR(page_dir) | PTE_P | PTE_W;
+    mm1->page_dir = page_dir;
+
+    // 将mm0的内存内容赋值到mm1，两个mm的内容是一样的
+    ret = dup_mmap(mm1, mm0);
+
+    assert(ret == 0);
+
+    // switch to mm1
+
+    check_mm_struct = mm1;
+    lcr3(PADDR(mm1->page_dir));
+
+    addr1 = addr0;
+    for (i = 0; i < 8; i++, addr1 += PAGE_SIZE) {
+        assert(*(char *)addr1 == (char)(i * i));
+        *(char *)addr1 = (char)0x88;
+    }
+
+    // switch to mm0
+    check_mm_struct = mm0;
+    lcr3(PADDR(mm0->page_dir));
+
+    addr1 = addr0;
+    for (i = 0; i < 8; i++, addr1 += PAGE_SIZE) {
+        assert(*(char *)addr1 == (char)(i * i));
+    }
+    // switch to boot_cr3
+
+    check_mm_struct = NULL;
+    lcr3(PADDR(get_boot_page_dir()));
+
+    // free memory
+    // 释放所有的mm的页表项映射的page，以及所有的页表page
+    exit_mmap(mm0);
+    exit_mmap(mm1);
+
+    // 释放页目录的page
+    free_page(kva2page(mm0->page_dir));
+    // 释放mm的所有vma结构体，释放mm结构体
+    mm_destory(mm0);
+    free_page(kva2page(mm1->page_dir));
+    mm_destory(mm1);
+
+    printk("check_mm_swap: step4, dup_mmap ok.\n");
+
+    // 回收swap中所有的page
+    refill_inactive_scan();
+    page_launder();
+    for (i = 0; i < max_swap_offset; i++) {
+        assert(mem_map[i] == SWAP_UNUSED);
+    }
+    assert(nr_free_pages_store == nr_free_pages());
+    assert(slab_allocated_store == slab_allocated());
+
+    printk("check_mm_swap successed\n");
 }

@@ -1,13 +1,13 @@
 #ifndef __INCLUDE_ERROR_H__
 #define __INCLUDE_ERROR_H__
 
-enum Error {
+
 	// kernel error codes -- keep in sync with list in lib/printfmt.c
-	E_INVAL	,	// invalid parameter
-	E_NO_MEM,
-	E_SWAP_FAULT,
+#define 	E_INVAL			1	// invalid parameter
+#define 	E_NO_MEM		2
+#define 	E_SWAP_FAULT	3
 	
-	MAX_ERROR
-};
+#define 	MAX_ERROR		3
+
 
 #endif // __INCLUDE_ERROR_H__

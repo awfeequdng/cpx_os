@@ -49,6 +49,14 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma);
 struct MmStruct *mm_create(void);
 void mm_destory(struct MmStruct *mm);
 
+int mm_map(struct MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
+         struct VmaStruct **vma_store);
+int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len);
+
+int dup_mmap(struct MmStruct *to, struct MmStruct *from);
+
+void exit_mmap(struct MmStruct *mm);
+
 void vmm_init(void);
 
 int do_page_fault(struct MmStruct *m, uint32_t error_code, uintptr_t addr);
