@@ -1418,12 +1418,10 @@ static void check_mm_shmem_swap(void) {
     }
 
     printk("before write addr2\n");
-    // 此时共享内存结构中的pte还是指向swap entry，因此对addr2的访问将产生两次中断
-    // 第一次addr2的pte为0，被赋值为swap entry(从共享内存结构的pte拷贝而来)；
-    // 第二次是addr2的pte指向swap entry，因此需要从swap 中加载page
     uintptr_t addr2 = addr1 + PT_SIZE * 2;
     mm_map_shmem(mm0, addr2, vm_flags, shmem, &vma);
     *(char *)addr2 = 0x30;
+    printk("after write addr2\n");
     assert(*(char *)addr0 == (char)0x30);
     assert(*(char *)addr1 == (char)0x30);
     assert(*(char *)addr2 == (char)0x30);

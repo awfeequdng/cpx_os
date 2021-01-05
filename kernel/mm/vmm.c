@@ -683,8 +683,15 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
             } else {
                 // todo: 这里为什么不设置页表项为page的地址，而是swap entry的值，
                 // 这就导致还会进行一次的page fault，干嘛不一次到位
-                swap_duplicate(*shmem_ptep);
-                *ptep = *shmem_ptep;
+                // swap_duplicate(*shmem_ptep);
+                // *ptep = *shmem_ptep;
+
+                // 我们可以一步到位，不需要产生两次page fault
+                struct Page *page = NULL;
+                if ((ret = swap_in_page(*shmem_ptep, &page)) != 0) {
+                    goto failed;
+                }
+                page_insert(mm->page_dir, page, addr, perm);
             }
         }
     } else {
