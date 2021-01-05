@@ -476,7 +476,7 @@ static void refill_inactive_scan(void) {
 
 // 尝试着解除pte的映射，并且将这些解除映射的page加入swap active list
 // 释放从addr 到 vm->end间映射的page，最多释放require个page
-static int swap_out_vma(struct MmStruct *mm, struct VmaStruct *vma, uintptr_t addr, size_t require) {
+static int swap_out_vma(MmStruct *mm, VmaStruct *vma, uintptr_t addr, size_t require) {
     if (require == 0 || !(addr >= vma->vm_start && addr < vma->vm_end)) {
         // addr 不在vma的地址范围，不能释放这个vma的page
         return 0;
@@ -534,6 +534,17 @@ static int swap_out_vma(struct MmStruct *mm, struct VmaStruct *vma, uintptr_t ad
             mm->swap_address = addr + PAGE_SIZE;
             free_count++;
             require--;
+            // 由于vma是一个共享内存，那么其页表项（这个vma的页表项）也一定在共享内存框架中有一个副本，
+            // 然而此时page的引用计数为1，说明只有共享内存框架中一个pte引用这个page，因此将共享内存中的
+            // pte设置为swap entry。
+            if ((vma->vm_flags & VM_SHARE) && page_ref(page) == 1) {
+                uintptr_t shmem_addr = addr - vma->vm_start + vma->shmem_off;
+                pte_t *shmem_ptep = shmem_get_entry(vma->shmem, shmem_addr, 0);
+                assert(shmem_ptep != NULL && *shmem_ptep != 0);
+                if (*shmem_ptep & PTE_P) {
+                    shmem_insert_entry(vma->shmem, shmem_addr, entry);
+                }
+            }
         }
 try_next_entry:
         addr += PAGE_SIZE;
@@ -543,7 +554,7 @@ try_next_entry:
 
 // 尝试着调用swap_out_vma将所有vma的pte映射拆除
 // require表示需要拆除映射的page的个数
-static int swap_out_mm(struct MmStruct *mm, size_t require) {
+static int swap_out_mm(MmStruct *mm, size_t require) {
     assert(mm != NULL);
 
     if (require == 0 || mm->map_count == 0) {
@@ -553,7 +564,7 @@ static int swap_out_mm(struct MmStruct *mm, size_t require) {
 
     // 下一个swap的起始地址
     uintptr_t addr = mm->swap_address;
-    struct VmaStruct *vma;
+    VmaStruct *vma;
     if ((vma = find_vma(mm, addr)) == NULL) {
         // 从addr这个地址开始查找vma，如果找不到vma则从addr = 0的这个地址开始查找vma
         addr = mm->swap_address = 0;
@@ -600,10 +611,10 @@ void check_swap(void) {
         mem_map[offset] = 1;
     }
 
-    struct MmStruct *mm = mm_create();
+    MmStruct *mm = mm_create();
     assert(mm != NULL);
 
-    extern struct MmStruct *check_mm_struct;
+    extern MmStruct *check_mm_struct;
     assert(check_mm_struct == NULL);
 
     check_mm_struct = mm;
@@ -612,7 +623,7 @@ void check_swap(void) {
     assert(pgdir[0] == 0);
 
     // 创建一个4M大小的vma
-    struct VmaStruct *vma = vma_create(0, PT_SIZE, VM_WRITE | VM_READ);
+    VmaStruct *vma = vma_create(0, PT_SIZE, VM_WRITE | VM_READ);
     assert(vma != NULL);
 
     // 将vma插入mm
@@ -1012,13 +1023,13 @@ static void check_mm_swap(void) {
         assert(mem_map[i] == SWAP_UNUSED);
     }
 
-    extern struct MmStruct *check_mm_struct;
+    extern MmStruct *check_mm_struct;
     assert(check_mm_struct == NULL);
 
     // step1: check mm_map
 
-    struct MmStruct *mm0 = mm_create();
-    struct MmStruct *mm1 = NULL;
+    MmStruct *mm0 = mm_create();
+    MmStruct *mm1 = NULL;
     assert(mm0 != NULL && list_empty(&(mm0->mmap_link)));  
 
     uintptr_t addr0, addr1;
@@ -1092,7 +1103,7 @@ static void check_mm_swap(void) {
     lcr3(PADDR(mm0->page_dir));
 
     uint32_t vm_flags = VM_WRITE | VM_READ;
-    struct VmaStruct *vma = NULL;
+    VmaStruct *vma = NULL;
     addr0 = 0;
     do {
         if ((ret = mm_map(mm0, addr0, PT_SIZE, vm_flags, &vma)) == 0) {
@@ -1321,11 +1332,11 @@ static void check_mm_shmem_swap(void) {
         assert(mem_map[i] == SWAP_UNUSED);
     }
 
-    extern struct MmStruct *check_mm_struct;
+    extern MmStruct *check_mm_struct;
     assert(check_mm_struct == NULL);
 
-    struct MmStruct *mm0 = mm_create();
-    struct MmStruct *mm1 = NULL;
+    MmStruct *mm0 = mm_create();
+    MmStruct *mm1 = NULL;
 
     assert(mm0 != NULL && list_empty(&(mm0->mmap_link)));
 
@@ -1359,10 +1370,138 @@ static void check_mm_shmem_swap(void) {
     assert(shmem != NULL && shmem_ref(shmem) == 0);
 
     // step1: check share memory
-
-    struct VmaStruct *vma;
+    printk("step1: check share memory.\n");
+    VmaStruct *vma;
 
     addr1 = addr0 + PT_SIZE * 2;
+
+    ret = mm_map_shmem(mm0, addr0, vm_flags, shmem, &vma);
+    assert(ret == 0);
+    assert(vma->vm_flags & VM_SHARE);
+    assert(vma->shmem == shmem && shmem_ref(shmem) == 1);
+    ret = mm_map_shmem(mm0, addr1, vm_flags, shmem, &vma);
+    assert(ret == 0);
+    assert(vma->vm_flags & VM_SHARE);
+    assert(vma->shmem == shmem && shmem_ref(shmem) == 2);
+
+    // page fault
+    for (int i = 0; i < 4; i++) {
+        *(char *)(addr0 + i * PAGE_SIZE) = (char)(i * i);
+    }
+    for (i = 0; i < 4; i++) {
+        assert(*(char *)(addr1 + i * PAGE_SIZE) == (char)(i * i));
+    }
+    
+    for (i = 0; i < 4; i ++) {
+        *(char *)(addr1 + i * PAGE_SIZE) = (char)(- i * i);
+    }
+    for (i = 0; i < 4; i ++) {
+        assert(*(char *)(addr1 + i * PAGE_SIZE) == (char)(- i * i));
+    }
+
+    // check swap
+    // swap_out_mm第一轮将两个vma的PTE_A清除，第二轮将所有的vma的pte驱逐，
+    // 驱逐后，pte对应的page被放入swap框架管理，当后一个vma的pte被驱逐后，
+    // page的引用计数变成了1，然后就将共享内存结构中的pte也驱逐出去，最后page的引用减为0，
+    // swap entry的引用计数为3，两个vma对swap entry的引用，以及共享内存结构对swap entry的引用
+    ret = swap_out_mm(mm0, 8) + swap_out_mm(mm0, 8);
+    assert(ret == 8 && nr_active_pages == 4 && nr_inactive_pages == 0);
+
+    refill_inactive_scan();
+    assert(nr_active_pages == 0 && nr_inactive_pages == 4);
+
+    // write & read again
+    printk("write & read again\n");
+    memset((void *)addr0, 0x77, PAGE_SIZE);
+    for (i = 0; i < PAGE_SIZE; i++) {
+        assert(*(char *)(addr1 + i) == (char)0x77);
+    }
+
+    printk("before write addr2\n");
+    // 此时共享内存结构中的pte还是指向swap entry，因此对addr2的访问将产生两次中断
+    // 第一次addr2的pte为0，被赋值为swap entry(从共享内存结构的pte拷贝而来)；
+    // 第二次是addr2的pte指向swap entry，因此需要从swap 中加载page
+    uintptr_t addr2 = addr1 + PT_SIZE * 2;
+    mm_map_shmem(mm0, addr2, vm_flags, shmem, &vma);
+    *(char *)addr2 = 0x30;
+    assert(*(char *)addr0 == (char)0x30);
+    assert(*(char *)addr1 == (char)0x30);
+    assert(*(char *)addr2 == (char)0x30);
+
+    // check unmap
+    ret = mm_unmap(mm0, addr1, PAGE_SIZE * 4);
+    assert(ret == 0);
+
+    addr0 += 4 * PAGE_SIZE;
+    addr1 += 4 * PAGE_SIZE;
+    *(char *)(addr0) = (char)(0xDC);
+    assert(*(char *)(addr1) == (char)0xDC);
+    *(char *)(addr1 + PT_SIZE) = (char)(0xDC);
+    assert(*(char *)(addr0 + PT_SIZE) == (char)0xDC);
+    printk("check_mm_shm_swap: step1， share memory ok.\n");
+
+    // setup mm1
+    mm1 = mm_create();
+    assert(mm1 != NULL);
+    
+    page = alloc_page();
+    assert(page != NULL);
+    page_dir = page2kva(page);
+    memcpy(page_dir, get_boot_page_dir(), PAGE_SIZE);
+    page_dir[PDX(VPT)] = PADDR(page_dir) | PTE_P | PTE_W;
+    mm1->page_dir = page_dir;
+
+    ret = dup_mmap(mm1, mm0);
+    assert(ret == 0 && shmem_ref(shmem) == 6);
+
+    // switch to mm1
+
+    check_mm_struct = mm1;
+    lcr3(PADDR(mm1->page_dir));
+
+    printk("before mm1 write\n");
+    // 如下的写操作会产生6个page fault，因为dup_mmap时，有一个pte项已经指向了page，另外三个pte的PTE_P都没有置位
+    // 这些pte都被拷贝过来了，因此总共产生6次page fault。
+    for (i = 0; i < 4; i++) {
+        *(char *)(addr0 + i * PAGE_SIZE) = (char)(0x57 + i);
+    }
+    for (i = 0; i < 4; i++) {
+        assert(*(char *)(addr1 + i * PAGE_SIZE) == (char)(0x57 + i));
+    }
+
+    check_mm_struct = mm0;
+    lcr3(PADDR(mm0->page_dir));
+
+    for (i = 0; i < 4; i++) {
+        assert(*(char *)(addr0 + i * PAGE_SIZE) == (char)(0x57 + i));
+        assert(*(char *)(addr1 + i * PAGE_SIZE) == (char)(0x57 + i));
+    }
+
+    swap_out_mm(mm1, 4);
+    exit_mmap(mm1);
+
+    free_page(kva2page(mm1->page_dir));
+    mm_destory(mm1);
+
+    assert(shmem_ref(shmem) == 3);
+    printk("check_mm_shm_swap: step2, dup_mmap ok.\n");
+
+    // free memory
+    check_mm_struct = NULL;
+    lcr3(PADDR(get_boot_page_dir()));
+
+    exit_mmap(mm0);
+    free_page(kva2page(mm0->page_dir));
+    mm_destory(mm0);
+
+    refill_inactive_scan();
+    page_launder();
+    for (i = 0; i < max_swap_offset; i++) {
+        assert(mem_map[i] == SWAP_UNUSED);
+    }
+    
+    assert(nr_free_pages_store == nr_free_pages());
+    assert(slab_allocated_store == slab_allocated());
 
     printk("check_mm_shmem_swap successed\n");
 }

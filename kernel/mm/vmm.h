@@ -8,10 +8,10 @@
 #include <rbtree.h>
 #include <shmem.h>
 
-struct MmStruct;
+struct mm_struct;
 
-struct VmaStruct {
-    struct MmStruct *vm_mm;
+typedef struct {
+    struct mm_struct *vm_mm;
     // [start, end)
     uintptr_t vm_start;
     uintptr_t vm_end;
@@ -20,13 +20,13 @@ struct VmaStruct {
     list_entry_t vma_link;
     ShareMemory *shmem;
     size_t shmem_off;
-};
+} VmaStruct;
 
 #define le2vma(le, member)  \
-    container_of(le, struct VmaStruct, member)
+    container_of(le, VmaStruct, member)
 
 #define rbn2vma(node, member)   \
-    container_of(node, struct VmaStruct, member)
+    container_of(node, VmaStruct, member)
 
 #define VM_READ         0x00000001
 #define VM_WRITE        0x00000002
@@ -34,36 +34,36 @@ struct VmaStruct {
 #define VM_STACK        0x00000008
 #define VM_SHARE        0x00000010
 
-struct MmStruct {
+typedef struct mm_struct {
     list_entry_t mmap_link;
     rbtree_t mmap_tree;        // 紅黑樹，用於鏈接VmmStruct，紅黑樹按照vmm的start 地址排序
-    struct VmaStruct *mmap_cache;
+    VmaStruct *mmap_cache;
     pde_t *page_dir;
     int map_count;
     uintptr_t swap_address;
-};
+} MmStruct;
 
 // 當節點數量大於32時，採用紅黑樹將vma鏈接起來
 #define RB_MIN_MAP_COUNT 32
 
-struct VmaStruct *find_vma(struct MmStruct *mm, uintptr_t addr);
-struct VmaStruct *vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_flags);
-void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma);
+VmaStruct *find_vma(MmStruct *mm, uintptr_t addr);
+VmaStruct *vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_flags);
+void insert_vma_struct(MmStruct *mm, VmaStruct *vma);
 
-struct MmStruct *mm_create(void);
-void mm_destory(struct MmStruct *mm);
+MmStruct *mm_create(void);
+void mm_destory(MmStruct *mm);
 
-int mm_map(struct MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
-         struct VmaStruct **vma_store);
-int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len);
+int mm_map(MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
+         VmaStruct **vma_store);
+int mm_unmap(MmStruct *mm, uintptr_t addr, size_t len);
 
-int dup_mmap(struct MmStruct *to, struct MmStruct *from);
+int dup_mmap(MmStruct *to, MmStruct *from);
 
-void exit_mmap(struct MmStruct *mm);
+void exit_mmap(MmStruct *mm);
 
 void vmm_init(void);
 
-int do_page_fault(struct MmStruct *m, uint32_t error_code, uintptr_t addr);
+int do_page_fault(MmStruct *m, uint32_t error_code, uintptr_t addr);
 
 void print_vma(void);
 

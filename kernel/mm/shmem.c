@@ -19,12 +19,12 @@ ShareMemory *shmem_create(size_t len) {
     return sh_mem;
 }
 
-static Shmn *shmn_create(uintptr_t start) {
+static ShareMemNode *shmn_create(uintptr_t start) {
     // 共享内存中entry（1个page大小）可以存放SHMN_N_ENTRY（1024）个pte_t结构，
     // 每个pte_t映射PAGE_SIZE(4k)的物理内存，因此一个共享内存结构总共可以共享
     // PAGE_SIZE * SHMN_N_ENTRY （4M）的大小，因此映射的起始地址我们也要以4M对齐
     assert(start % (PAGE_SIZE * SHMN_N_ENTRY) == 0);
-    Shmn *shmn = kmalloc(sizeof(Shmn));
+    ShareMemNode *shmn = kmalloc(sizeof(ShareMemNode));
     if (shmn != NULL) {
         struct Page *page = NULL;
         if ((page = alloc_page()) != NULL) {
@@ -61,7 +61,7 @@ static inline void shmem_remove_entry_pte(pte_t *ptep) {
     }
 }
 
-static void shmn_destory(Shmn *shmn) {
+static void shmn_destory(ShareMemNode *shmn) {
     int i;
     for (i = 0; i < SHMN_N_ENTRY; i++) {
         shmem_remove_entry_pte(shmn->entry + i);
@@ -70,15 +70,15 @@ static void shmn_destory(Shmn *shmn) {
     kfree(shmn);
 }
 
-static Shmn *shmn_find(ShareMemory *sh_mem, uintptr_t addr) {
-    Shmn *shmn = sh_mem->shmn_cache;
+static ShareMemNode *shmn_find(ShareMemory *sh_mem, uintptr_t addr) {
+    ShareMemNode *shmn = sh_mem->shmn_cache;
     // 当前地址在shmn中没有找到
     if (!(shmn != NULL && shmn->start <= addr && addr < shmn->end)) {
         shmn = NULL;
         list_entry_t *head = &(sh_mem->shmn_link);
         list_entry_t *entry = head;
         while ((entry = list_next(entry)) != head) {
-            Shmn *tmp = le2shmn(entry, link);
+            ShareMemNode *tmp = le2shmn(entry, link);
             if (tmp->start <= addr && addr < tmp->end) {
                 shmn = tmp;
                 break;
@@ -91,19 +91,19 @@ static Shmn *shmn_find(ShareMemory *sh_mem, uintptr_t addr) {
     return shmn;
 }
 
-static inline void shmn_check_overlap(Shmn *prev, Shmn *next) {
+static inline void shmn_check_overlap(ShareMemNode *prev, ShareMemNode *next) {
     assert(prev->start < prev->end);
     assert(prev->end <= next->start);
     assert(next->start < next->end);
 }
 
-static void shmn_insert(ShareMemory *sh_mem, Shmn *shmn) {
+static void shmn_insert(ShareMemory *sh_mem, ShareMemNode *shmn) {
     list_entry_t *head = &(sh_mem->shmn_link);
     list_entry_t *entry = head;
     list_entry_t *entry_prev = head;
     list_entry_t *entry_next = NULL;
     while ((entry = list_next(entry)) != head) {
-        Shmn *shmn_prev = le2shmn(entry, link);
+        ShareMemNode *shmn_prev = le2shmn(entry, link);
         if (shmn_prev->start > shmn->start) {
             break;
         }
@@ -134,7 +134,7 @@ void shmem_destory(ShareMemory *sh_mem) {
 pte_t *shmem_get_entry(ShareMemory *sh_mem, uintptr_t addr, bool create) {
     assert(addr < sh_mem->len);
     addr = ROUNDDOWN(addr, PAGE_SIZE);
-    Shmn *shmn = shmn_find(sh_mem, addr);
+    ShareMemNode *shmn = shmn_find(sh_mem, addr);
 
     assert(shmn == NULL || (shmn->start <= addr && addr < shmn->end));
     if (shmn == NULL) {

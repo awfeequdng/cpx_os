@@ -122,7 +122,7 @@ static void print_page_fault(struct TrapFrame *tf) {
 }
 
 static int page_fault_handler(struct TrapFrame *tf) {
-	extern struct MmStruct *check_mm_struct;
+	extern MmStruct *check_mm_struct;
 	print_page_fault(tf);
 	if (check_mm_struct != NULL) {
 		return do_page_fault(check_mm_struct, tf->tf_err, rcr2());

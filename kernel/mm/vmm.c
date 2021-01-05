@@ -1,5 +1,5 @@
 #include <vmm.h>
-
+#include <shmem.h>
 #include <assert.h>
 #include <pmm.h>
 #include <slab.h>
@@ -8,15 +8,15 @@
 #include <swap.h>
 
 static int vma_compare(rbtree_node_t *node1, rbtree_node_t *node2) {
-    struct VmaStruct *vma1 = rbn2vma(node1, rb_link);
-    struct VmaStruct *vma2 = rbn2vma(node2, rb_link);
+    VmaStruct *vma1 = rbn2vma(node1, rb_link);
+    VmaStruct *vma2 = rbn2vma(node2, rb_link);
     uintptr_t start1 = vma1->vm_start;
     uintptr_t start2 = vma2->vm_start;
     return (start1 < start2) ? -1 : ((start1 > start2) ? 1 : 0);
 }
 
-struct MmStruct *mm_create(void) {
-    struct MmStruct *mm = kmalloc(sizeof(struct MmStruct));
+MmStruct *mm_create(void) {
+    MmStruct *mm = kmalloc(sizeof(MmStruct));
     if (mm != NULL) {
         list_init(&(mm->mmap_link));
         mm->mmap_cache = NULL;
@@ -29,8 +29,8 @@ struct MmStruct *mm_create(void) {
     return mm;
 }
 
-struct VmaStruct *vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_flags) {
-    struct VmaStruct *vma = kmalloc(sizeof(struct VmaStruct));
+VmaStruct *vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_flags) {
+    VmaStruct *vma = kmalloc(sizeof(VmaStruct));
     if (vma != NULL) {
         vma->vm_start = vm_start;
         vma->vm_end = vm_end;
@@ -42,10 +42,10 @@ struct VmaStruct *vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_f
 }
 
 // 找到addr右邊最近的vma
-static inline struct VmaStruct *find_vma_rb(rbtree_t *tree, uintptr_t addr) {
+static inline VmaStruct *find_vma_rb(rbtree_t *tree, uintptr_t addr) {
     rbtree_node_t *node = rbtree_root(tree);
-    struct VmaStruct *tmp = NULL;
-    struct VmaStruct *vma = NULL;
+    VmaStruct *tmp = NULL;
+    VmaStruct *vma = NULL;
     while (node  != rbtree_sentinel(tree)) {
         tmp = rbn2vma(node, rb_link);
         if (tmp->vm_end > addr) {
@@ -63,8 +63,8 @@ static inline struct VmaStruct *find_vma_rb(rbtree_t *tree, uintptr_t addr) {
     return vma;
 }
 
-struct VmaStruct *find_vma(struct MmStruct *mm, uintptr_t addr) {
-    struct VmaStruct *vma = NULL;
+VmaStruct *find_vma(MmStruct *mm, uintptr_t addr) {
+    VmaStruct *vma = NULL;
     if (mm != NULL) {
         vma = mm->mmap_cache;
         if (!(vma != NULL && vma->vm_start <= addr && vma->vm_end > addr)) {
@@ -96,13 +96,13 @@ struct VmaStruct *find_vma(struct MmStruct *mm, uintptr_t addr) {
     return vma;
 }
 
-static inline void check_vma_overlap(struct VmaStruct *prev, struct VmaStruct *next) {
+static inline void check_vma_overlap(VmaStruct *prev, VmaStruct *next) {
     assert(prev->vm_start < prev->vm_end);
     assert(prev->vm_end <= next->vm_start);
     assert(next->vm_start < next->vm_end);
 }
 
-static inline void insert_vma_rb(rbtree_t *tree, struct VmaStruct *vma, struct VmaStruct **vma_prevp) {
+static inline void insert_vma_rb(rbtree_t *tree, VmaStruct *vma, VmaStruct **vma_prevp) {
     rbtree_node_t *node = &(vma->rb_link);
     rbtree_node_t *prev = NULL;
     rbtree_insert(tree, node);
@@ -118,7 +118,7 @@ static inline void insert_vma_rb(rbtree_t *tree, struct VmaStruct *vma, struct V
 
 // 插入新的vma时，即使两个vma相邻，并且vm_flags也相同，也没有将两个vma合并
 // todo: 此处有必要做一下优化，将相邻的并且属性相同的vma合并
-void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
+void insert_vma_struct(MmStruct *mm, VmaStruct *vma) {
     assert(vma->vm_start < vma->vm_end);
     list_entry_t *head = &(mm->mmap_link);
     list_entry_t *entry_prev = head;
@@ -126,7 +126,7 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     list_entry_t *entry = NULL;
     
     if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
-        struct VmaStruct *mmap_prev = NULL;
+        VmaStruct *mmap_prev = NULL;
         insert_vma_rb(&(mm->mmap_tree), vma, &mmap_prev);
         if (mmap_prev != NULL) {
             entry_prev = &(mmap_prev->vma_link);
@@ -134,7 +134,7 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     } else {
         list_entry_t *entry = head;
         while ((entry = list_next(entry)) != head) {
-            struct VmaStruct *mmap_prev = le2vma(entry, vma_link);
+            VmaStruct *mmap_prev = le2vma(entry, vma_link);
             if (mmap_prev->vm_start > vma->vm_start) {
                 // vma插入在mmap_prev前面
                 break;
@@ -167,7 +167,7 @@ void insert_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     }
 }
 
-static int remove_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
+static int remove_vma_struct(MmStruct *mm, VmaStruct *vma) {
     assert(mm == vma->vm_mm);
     if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
         rbtree_delete(&(mm->mmap_tree), &(vma->rb_link));
@@ -180,20 +180,26 @@ static int remove_vma_struct(struct MmStruct *mm, struct VmaStruct *vma) {
     return 0;
 }
 
-void mm_destory(struct MmStruct *mm) {
+static void vma_destory(VmaStruct *vma) {
+    if (vma->vm_flags & VM_SHARE) {
+        if (shmem_ref_dec(vma->shmem) == 0) {
+            // 此共享内存结构没有vma引用了，将其释放
+            shmem_destory(vma->shmem);
+        }
+    }
+    kfree(vma);
+}
+
+void mm_destory(MmStruct *mm) {
     // if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
     // }
     list_entry_t *head = &(mm->mmap_link);
     list_entry_t *entry = head;
     while ((entry = list_next(entry)) != head) {
         list_del(entry);
-        kfree(le2vma(entry, vma_link));
+        vma_destory(le2vma(entry, vma_link));
     }
     kfree(mm);
-}
-
-static void vma_destory(struct VmaStruct *vma) {
-    kfree(vma);
 }
 
 static void check_vmm(void);
@@ -205,8 +211,8 @@ void vmm_init(void) {
 }
 
 // 从[addr, addr + len)建立一个vma映射
-int mm_map(struct MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
-         struct VmaStruct **vma_store) {
+int mm_map(MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
+         VmaStruct **vma_store) {
     uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
     uintptr_t end = ROUNDUP(addr + len, PAGE_SIZE);
     if (!USER_ACCESS(start, end)) {
@@ -216,13 +222,15 @@ int mm_map(struct MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
     assert (mm != NULL);
 
     int ret = -E_INVAL;
-    struct VmaStruct *vma;
+    VmaStruct *vma;
     if ((vma = find_vma(mm, start)) != NULL && end > vma->vm_start) {
         // 如果找到的地址范围[start， end)和存在vma地址范围重叠，则直接退出，返回失败
         goto out;
     }
 
     ret = -E_NO_MEM;
+    // todo: 为什么这个时候将VM_SHARE的标志清除掉？
+    vm_flags &= ~VM_SHARE;
     if ((vma = vma_create(start, end, vm_flags)) == NULL) {
         goto out;
     }
@@ -237,10 +245,69 @@ out:
     return ret;
 }
 
-static void vma_resize(struct VmaStruct *vma, uintptr_t start, uintptr_t end) {
+int mm_map_shmem(MmStruct *mm, uintptr_t addr, uint32_t vm_flags,
+        ShareMemory *shmem, VmaStruct **vma_store) {
+    if ((addr % PAGE_SIZE) != 0 || shmem == NULL) {
+        return -E_INVAL;
+    }
+    int ret;
+    VmaStruct *vma;
+    // 又有一个vma引用该shmem结构，因此引用计数加1
+    shmem_ref_inc(shmem);
+    // 当创建一个共享的vma时，mm_map中占时不设置VM_SHARE标志，
+    // 等到创建完vma后再设置这个标志
+    if ((ret = mm_map(mm, addr, shmem->len, vm_flags, &vma)) != 0) {
+        shmem_ref_dec(shmem);
+        return ret;
+    }
+    vma->shmem = shmem;
+    vma->shmem_off = 0;
+    vma->vm_flags |= VM_SHARE;
+    if (vma_store != NULL) {
+        *vma_store = vma;
+    }
+    return 0;
+}
+
+// 检查用户空间的内存是否可写（write为true），或者可读（write为false）
+bool user_mem_check(MmStruct *mm, uintptr_t addr, size_t len, bool write) {
+    if (mm != NULL) {
+        if (!USER_ACCESS(addr, addr + len)) {
+            return 0;
+        }
+        VmaStruct *vma = NULL;
+        uintptr_t start = addr;
+        uintptr_t end = addr + len;
+        while (start < end) {
+            if ((vma = find_vma(mm, start)) == NULL) {
+                return false;
+            }
+            if (!(vma->vm_flags & (write ? VM_WRITE : VM_READ))) {
+                return false;
+            }
+            // 地址空间可写，并且时STACK区域
+            if (write && (vma->vm_flags & VM_STACK)) {
+                // todo: 这是何意？？
+                if (start < vma->vm_start + PAGE_SIZE) {
+                    return false;
+                }
+            }
+            start = vma->vm_end;
+        }
+        return true;
+    }
+    // todo: 为什么内核空间地址也返回true?
+    return KERNEL_ACCESS(addr, addr + len);
+}
+
+static void vma_resize(VmaStruct *vma, uintptr_t start, uintptr_t end) {
     assert(start % PAGE_SIZE == 0 && end % PAGE_SIZE == 0);
     // 调整vma大小时，只能缩小范围
     assert(vma->vm_start <= start && start < end && vma->vm_end >= end);
+    if (vma->vm_flags & VM_SHARE) {
+        // shmem_off表示什么？
+        vma->shmem_off += start - vma->vm_start;
+    }
     vma->vm_start = start;
     vma->vm_end = end;
 }
@@ -263,7 +330,7 @@ static void unmap_range(pte_t *page_dir, uintptr_t start, uintptr_t end) {
     } while (start != 0 && start < end);
 }
 
-int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len) {
+int mm_unmap(MmStruct *mm, uintptr_t addr, size_t len) {
     uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
     uintptr_t end = ROUNDUP(addr + len, PAGE_SIZE);
     if (!USER_ACCESS(start, end)) {
@@ -271,14 +338,14 @@ int mm_unmap(struct MmStruct *mm, uintptr_t addr, size_t len) {
     }
     assert(mm != NULL);
 
-    struct VmaStruct *vma;
+    VmaStruct *vma;
     if ((vma = find_vma(mm, start)) == NULL || end <= vma->vm_start) {
         // 没有找到addr对应的vma
         return 0;
     }
     // 如果[start, end)在vma的地址范围内，则将vma分成左边界和右边界两个vma
     if (vma->vm_start < start && end < vma->vm_end) {
-        struct VmaStruct *left_vma;
+        VmaStruct *left_vma;
         if ((left_vma = vma_create(vma->vm_start, start, vma->vm_flags)) == NULL) {
             return -E_NO_MEM;
         }
@@ -347,6 +414,10 @@ void exit_range(pde_t *page_dir, uintptr_t start, uintptr_t end) {
     } while (start != 0 && start < end);
 }
 
+// 将from的页目录以及页表项的内容拷贝到to，
+// 如果share为true的话，那么from的页表项和to的页表项指向相同的物理内存，
+// 也就是实现共享内存。当share为false的话，from的页表项和to的页表项指向不同的物理内存，
+// to页表项指向的物理内存时from的拷贝。
 int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool share) {
     assert(start % PAGE_SIZE == 0 && end % PAGE_SIZE == 0);
     assert(USER_ACCESS(start, end));
@@ -368,18 +439,28 @@ int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool shar
             if (*ptep & PTE_P) {
                 // 为什么只设置PTE_USER一个标志，其他的标志不需要复制吗？
                 uint32_t perm = (*ptep & PTE_USER);
-                new_page = alloc_page();
-                if (new_page == NULL) {
-                    return -E_NO_MEM;
+                if (!share) {
+                    new_page = alloc_page();
+                    if (new_page == NULL) {
+                        return -E_NO_MEM;
+                    }
+                    memcpy(page2kva(new_page), page2kva(pte2page(*ptep)), PAGE_SIZE);
+                } else {
+                    // 实现和from共享内存
+                    new_page = pte2page(*ptep);
                 }
-                memcpy(page2kva(new_page), page2kva(pte2page(*ptep)), PAGE_SIZE);
                 ret = page_insert(to, new_page, start, perm);
                 assert(ret == 0);
             } else {
                 // ptep指向swap entry
-                swap_entry_t entry;
-                if (swap_copy_entry(*ptep, &entry) != 0) {
-                    return -E_NO_MEM;
+                swap_entry_t entry = *ptep;
+                if (!share) {
+                    // swap entry不共享，将*ptep在swap分区中的数据换入到新的page（如果这个page已经被释放的话，也就是在hash list上找不到这个page了）,
+                    // 然后将这个新换入的page拷贝给另一个new_page，并把new_page放入swap框架中，最后返回这个new_page的swap entry,
+                    // 也就是最终的entry，从而实现swap分区数据的拷贝
+                    if (swap_copy_entry(*ptep, &entry) != 0) {
+                        return -E_NO_MEM;
+                    }
                 }
                 swap_duplicate(entry);
                 *new_ptep = entry;
@@ -390,19 +471,27 @@ int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool shar
     return 0;
 }
 
-int dup_mmap(struct MmStruct *to, struct MmStruct *from) {
+int dup_mmap(MmStruct *to, MmStruct *from) {
     assert(to != NULL && from != NULL);
     list_entry_t *head = &(from->mmap_link);
     list_entry_t *entry = head;
     while ((entry = list_prev(entry)) != head) {
-        struct VmaStruct *vma = NULL, *new_vma = NULL;
+        VmaStruct *vma = NULL, *new_vma = NULL;
         vma = le2vma(entry, vma_link);
         new_vma = vma_create(vma->vm_start, vma->vm_end, vma->vm_flags);
         if (new_vma == NULL) {
             return -E_NO_MEM;
+        } else {
+            if (vma->vm_flags & VM_SHARE) {
+                new_vma->shmem = vma->shmem;
+                new_vma->shmem_off = vma->shmem_off;
+                shmem_ref_inc(vma->shmem);
+            }
         }
         insert_vma_struct(to, new_vma);
-        if (copy_range(to->page_dir, from->page_dir, vma->vm_start, vma->vm_end, false) != 0) {
+        bool share = (vma->vm_flags & VM_SHARE);
+        // 复制页表项
+        if (copy_range(to->page_dir, from->page_dir, vma->vm_start, vma->vm_end, share) != 0) {
             return -E_NO_MEM;
         }
     }
@@ -410,17 +499,17 @@ int dup_mmap(struct MmStruct *to, struct MmStruct *from) {
 }
 
 // 删除vma映射的物理页，以及所有页表，只留下一个页目录
-void exit_mmap(struct MmStruct *mm) {
+void exit_mmap(MmStruct *mm) {
     assert(mm != NULL);
     pde_t *page_dir = mm->page_dir;
     list_entry_t *head = &(mm->mmap_link);
     list_entry_t *entry = head;
     while ((entry = list_next(entry)) != head) {
-        struct VmaStruct *vma = le2vma(entry, vma_link);
+        VmaStruct *vma = le2vma(entry, vma_link);
         unmap_range(page_dir, vma->vm_start, vma->vm_end);
     }
     while ((entry = list_next(entry)) != head) {
-        struct VmaStruct *vma = le2vma(entry, vma_link);
+        VmaStruct *vma = le2vma(entry, vma_link);
         exit_range(page_dir, vma->vm_start, vma->vm_end);
     }
 }
@@ -442,20 +531,20 @@ static void check_vma_struct() {
     size_t nr_free_pages_store = nr_free_pages();
     size_t slab_allocated_store = slab_allocated();
 
-    struct MmStruct *mm = mm_create();
+    MmStruct *mm = mm_create();
     assert(mm != NULL);
 
     int step1 = RB_MIN_MAP_COUNT * 2;
     int step2 = step1 * 10;
     int i;
     for (i = step1; i >= 0; i --) {
-        struct VmaStruct *vma = vma_create(i * 5, i * 5 + 2, 0);
+        VmaStruct *vma = vma_create(i * 5, i * 5 + 2, 0);
         assert(vma != NULL);
         insert_vma_struct(mm, vma);
     }
 
     for (i = step1 + 1; i <= step2; i ++) {
-        struct VmaStruct *vma = vma_create(i * 5, i * 5 + 2, 0);
+        VmaStruct *vma = vma_create(i * 5, i * 5 + 2, 0);
         assert(vma != NULL);
         insert_vma_struct(mm, vma);
     }
@@ -464,13 +553,13 @@ static void check_vma_struct() {
 
     for (i = 0; i <= step2; i++) {
         assert(entry != &(mm->mmap_link));
-        struct VmaStruct *mmap = le2vma(entry, vma_link);
+        VmaStruct *mmap = le2vma(entry, vma_link);
         assert(mmap->vm_start == i * 5 && mmap->vm_end == i * 5 + 2);
         entry = list_next(entry);
     }
 
     for (i = 0; i < 5 * step2 + 2; i++) {
-        struct VmaStruct *vma = find_vma(mm, i);
+        VmaStruct *vma = find_vma(mm, i);
         assert(vma != NULL);
         int j = i / 5;
         if (i >= 5 * j + 2) {
@@ -484,7 +573,7 @@ static void check_vma_struct() {
     printk("check_vma_struct: successed\n");
 }
 
-struct MmStruct *check_mm_struct;
+MmStruct *check_mm_struct;
 
 static void check_page_fault() {
     size_t nr_free_pages_store = nr_free_pages();
@@ -493,11 +582,11 @@ static void check_page_fault() {
     check_mm_struct = mm_create();
     assert(check_mm_struct != NULL);
 
-    struct MmStruct *mm = check_mm_struct;
+    MmStruct *mm = check_mm_struct;
     pde_t *page_dir = mm->page_dir = get_boot_page_dir();
     assert(page_dir[0] == 0);
 
-    struct VmaStruct *vma = vma_create(0, PT_SIZE, VM_WRITE);
+    VmaStruct *vma = vma_create(0, PT_SIZE, VM_WRITE);
     assert(vma != NULL);
 
     insert_vma_struct(mm, vma);
@@ -528,10 +617,10 @@ static void check_page_fault() {
     assert(slab_allocated_store == slab_allocated());
 }
 
-int do_page_fault(struct MmStruct *mm, uint32_t error_code, uintptr_t addr) {
+int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
     int ret = -E_INVAL;
 
-    struct VmaStruct *vma = find_vma(mm, addr);
+    VmaStruct *vma = find_vma(mm, addr);
     // 找到的vma可能在addr的右邊
     if (vma == NULL || vma->vm_start > addr) {
         goto failed;
@@ -553,7 +642,7 @@ int do_page_fault(struct MmStruct *mm, uint32_t error_code, uintptr_t addr) {
                 goto failed;
             }
     }
-    // 用戶權限
+    // 用户权限
     uint32_t perm = PTE_U;
     if (vma->vm_flags & VM_WRITE) {
         perm |= PTE_W;
@@ -568,9 +657,35 @@ int do_page_fault(struct MmStruct *mm, uint32_t error_code, uintptr_t addr) {
     }
 
     if (*ptep == 0) {
-        // 如果页表项为0，表示即不存在和page的映射，也不存在和swap的映射
-        if (page_dir_alloc_page(mm->page_dir, addr, perm) == 0) {
-            goto failed;
+        if (!(vma->vm_flags & VM_SHARE)) {
+            // vma不是共享内存
+            // 如果页表项为0，表示即不存在和page的映射，也不存在和swap的映射
+            if (page_dir_alloc_page(mm->page_dir, addr, perm) == 0) {
+                goto failed;
+            }
+        } else {
+            // vma是共享内存
+            shmem_lock(vma->shmem);
+            uintptr_t shmem_addr = addr - vma->vm_start + vma->shmem_off;
+            // 当发生page fault时，vma中的pte是直接从共享内存的pte拷贝过来的，
+            // 因此vma设置了VM_SHARE标志时，发生了page fault就先创建共享内存结构中的pte，
+            // 然后再将共享内存结构中的pte拷贝到vma
+            pte_t *shmem_ptep = shmem_get_entry(vma->shmem, shmem_addr, 1);
+            if (shmem_ptep == NULL || *shmem_ptep == 0) {
+                // 创建共享内存结构中的pte失败，可能是没有内存了
+                shmem_unlock(vma->shmem);
+                goto failed;
+            }
+            shmem_unlock(vma->shmem);
+            if (*shmem_ptep & PTE_P) {
+                // 在共享内存结构中存在pte值，将其指向的page插入页表项
+                page_insert(mm->page_dir, pte2page(*shmem_ptep), addr, perm);
+            } else {
+                // todo: 这里为什么不设置页表项为page的地址，而是swap entry的值，
+                // 这就导致还会进行一次的page fault，干嘛不一次到位
+                swap_duplicate(*shmem_ptep);
+                *ptep = *shmem_ptep;
+            }
         }
     } else {
         // 页表项不为0，那么产生page fault的原因就可能是PTE_P没有置位，
@@ -595,7 +710,7 @@ void print_vma(void) {
     if (check_mm_struct == NULL || check_mm_struct->map_count == 0) {
         return;
     }
-    struct VmaStruct *vma = NULL;
+    VmaStruct *vma = NULL;
     list_entry_t *head = &(check_mm_struct->mmap_link);
     list_entry_t *entry = list_next(head);
     while (entry != head) {
