@@ -695,16 +695,85 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
             }
         }
     } else {
-        // 页表项不为0，那么产生page fault的原因就可能是PTE_P没有置位，
-        // 但是存在swap entry，即pte的值就是swap entry值，
-        // 通过该swap entry找到page或者将数据换入进新的page
+        // 页表项不为0，那么产生page fault的原因就可能是PTE_P没有置位（PTE_P没有置位，但是pte的值不为0，说明pte指向swap entry），
+        // 或者PTE_P置位了，但是没有设置PTE_W标志而发生了写错误
         struct Page *page = NULL;
-        if ((ret = swap_in_page(*ptep, &page)) != 0) {
-            goto failed;
+        struct Page *new_page = NULL;
+        // vma不是共享内存的，并且可写，
+        // 此时产生了page fault将执行cow，也就是会产生新的page
+        bool cow = ((vma->vm_flags & (VM_SHARE | VM_WRITE)) == VM_WRITE);
+        bool may_copy = true;
+        bool dec_swap_entry = false;
+        swap_entry_t swap_entry = 0;
+        // 页表项没有指向page，或者
+        // 写错误(error_code & 2)，并且pte没有写权限，但是该vma有写的权限没有共享内存。也就是说该vma可写，但是页表项没有设置PTE_W标志，从而导致写时page fault
+        assert(!(*ptep & PTE_P) || ((error_code & 2) && !(*ptep & PTE_W) && cow));
+
+        if (cow) {
+            new_page = alloc_page();
         }
+
+        if (*ptep & PTE_P) {
+            // PTE_P位存在，说明发生了权限错误，可能是写操作时pte没有设置PTE_W标志导致的page fault
+            page = pte2page(*ptep);
+        } else {
+            // PTE_P标志不存在而导致的page fault
+            // 此时pte的值指向swap entry，
+            // 通过该swap entry找到page或者将数据换入进新的page
+            if ((ret = swap_in_page(*ptep, &page)) != 0) {
+                if (new_page != NULL) {
+                    free_page(new_page);
+                }
+                goto failed;
+            }
+            // page从swap中取出来，对应的pte可能需要指向这个这个page，
+            // 因此swap entry的计数就需要减1
+            dec_swap_entry = true;
+            swap_entry = page->index;
+
+            if (!(error_code & 2) && cow) {
+                // 不是写错误（即pte有写权限），并且支持写时复制，（此次是读产生的，不需要复制page）
+                // 既然是写时复制的vma，当前产生的page fault又不是写入产生的，那么就是PTE_P没有置位，
+                // 那么相应的pte应该清除PTE_W标志，让其在写入时发生page fault，从而进行page的拷贝
+                // 将swap entry对应的page加载进来，然后清除PTE_W（此次没必要复制page），并且不复制page
+                perm &= ~PTE_W;
+                // 次轮page fault不是写入导致的，不需要复制page
+                may_copy = false;
+            }
+        }
+        
+        // if ((ret = swap_in_page(*ptep, &page)) != 0) {
+        //     goto failed;
+        // }
+        // page_insert(mm->page_dir, page, addr, perm);
+        // // 页表项pte不指向swap entry时，对应的swap entry引用计数减1
+        // swap_decrease(page->index);
+
+        // 支持写时复制，并且当前需要拷贝page
+        if (cow && may_copy) {
+            // 有pte引用这个page，或者有swap entry引用这个page，
+            // 那么page中的内容是有用的，写时复制就需要拷贝这个page
+            // page总的引用计数大于1，说明有多个pte引用同一个页表，此时发生page fault就需要写时复制
+            // 如果page的引用计数为1，说明page只有一个pte引用了，就没有必要再复制page，发生page fault可能就是PTE_W没有置位，现在将这个标志设置上即可
+            if (page_ref(page) + swap_page_count(page) > 1) {
+                if (new_page == NULL) {
+                    goto failed;
+                }
+                memcpy(page2kva(new_page), page2kva(page), PAGE_SIZE);
+                page = new_page;
+                new_page = NULL;
+            }
+        }
+
         page_insert(mm->page_dir, page, addr, perm);
-        // 页表项pte不指向swap entry时，对应的swap entry引用计数减1
-        swap_decrease(page->index);
+        
+        if (dec_swap_entry) {
+            // 如果page是从swap框架中加载来的，则将对应的swap entry引用计数减1
+            swap_decrease(swap_entry);
+        }
+        if (new_page != NULL) {
+            free_page(new_page);
+        }
     }
 
     ret = 0;

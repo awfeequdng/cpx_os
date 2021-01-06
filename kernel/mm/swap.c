@@ -888,34 +888,44 @@ void check_swap(void) {
     *ptep1 = *ptep0;
 
     // page fault again
-    // 0地址会产生一次page fault，并将swap entry:1的内容加载进一个新的page,
-    // 并建立swap entry:1和这个新page的映射关系，然后这个page和0地址的页表项建立映射
-    // 当page被换入后，swap entry:1的引用计数减1
-    *(char *)0 = 0xFF;
-    // PAGE_SIZE + 1地址再一次产生page fault，在swap框架中搜索swap entry:1映射的page（是可以找到的，刚刚建立的映射），
-    // 找到这个page后，和PAGE_SIZE地址的页表项建立映射关系，
-    // 此时0地址的页表项和PAGE_SIZE地址的页表项指向同一个page，
-    // 此时swap entry:1的引用计数再减1，最后的引用计数就是0
-    *(char *)(PAGE_SIZE + 1) = 0x88;
-    assert(pte2page(*ptep0) == pte2page(*ptep1));
+    // update for copy on write
+
+    // 由于当前的vma支持读写，因此在支持cow功能时，如果两个pte指向相同的swap entry，那么在发生写时page fault时，两个pte会使用各自的page
+    // // 0地址会产生一次page fault，并将swap entry:1的内容加载进一个新的page,
+    // // 并建立swap entry:1和这个新page的映射关系，然后这个page和0地址的页表项建立映射
+    // // 当page被换入后，swap entry:1的引用计数减1
+    // // PAGE_SIZE + 1地址再一次产生page fault，在swap框架中搜索swap entry:1映射的page（是可以找到的，刚刚建立的映射），
+    // // 找到这个page后，和PAGE_SIZE地址的页表项建立映射关系，
+    // // 此时0地址的页表项和PAGE_SIZE地址的页表项指向同一个page，
+    // // 此时swap entry:1的引用计数再减1，最后的引用计数就是0
+    *(char *)1 = 0x88;
+    *(char *)(PAGE_SIZE) = 0x8F;
+    *(char *)(PAGE_SIZE + 1) = 0xff;
+    assert(pte2page(*ptep0) != pte2page(*ptep1));
+    assert(*(char *)0 == (char)0xEF);
+    assert(*(char *)1 == (char)0x88);
+    assert(*(char *)(PAGE_SIZE) == (char)0x8F);
+    assert(*(char *)(PAGE_SIZE + 1) == (char)0xFF);
     rp0 = pte2page(*ptep0);
-    assert(*(char *)1 == (char)0x88 && *(char *)PAGE_SIZE == (char)0xFF);
+    rp1 = pte2page(*ptep1);
+    // 先发生page fault的页表指向一个新申请的页，这个页没有放在swap框架中，
+    // 后发生page fault的页表指向之前在swap 框架中的page，并且这个只有一个pte指向这个page
+    assert(!PageSwap(rp0));
+    assert(PageActive(rp1));
+    assert(PageSwap(rp1));
 
-    // 没有pte指向swap entry:1，因此mem_map[1]的值为0
-    assert(page_ref(rp0) == 2 && rp0->index == entry && mem_map[1] == 0);
-
-    // mem_map[1]的值为0，说明rp0还存在和swap的映射关系
-    assert(PageSwap(rp0) && PageActive(rp0));
     // 此时swap entry:1的引用计数为0，可以使用，
     // 因此将rp0和swap entry:1的映射关系拆除，以腾出swap entry:1
     entry = try_alloc_swap_entry();
     assert(swap_offset(entry) == 1 && mem_map[1] == SWAP_UNUSED);
     // rp0和swap没有映射关系了
-    assert(!PageSwap(rp0));
+    assert(!PageSwap(rp1));
 
     // 当前不存在page和swap entry的映射关系了
     assert(list_empty(&(active_list.swap_link)));
     assert(list_empty(&(inactive_list.swap_link)));
+    // todo: 为什么要设置rp0的访问权限为PTE_A
+    page_insert(pgdir, rp0, PAGE_SIZE, perm | PTE_A);
 
     // check swap_out_mm
 
