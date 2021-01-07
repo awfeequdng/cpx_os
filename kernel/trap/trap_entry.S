@@ -33,3 +33,9 @@ __trap_ret:
 	# get rid of the trap number and error code
 	addl $0x8, %esp
 	iret
+
+
+	.global forkrets
+forkrets:
+	movl 4(%esp), %esp
+	jmp __trap_ret

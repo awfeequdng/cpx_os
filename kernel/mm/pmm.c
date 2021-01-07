@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <swap.h>
+#include <slab.h>
 
 
 static struct SegDesc gdt[] = {

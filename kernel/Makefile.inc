@@ -11,7 +11,9 @@ KERNEL_INC += kernel/driver \
 			  kernel/mm \
 			  kernel/lib \
 			  kernel/sync \
-			  kernel/fs
+			  kernel/fs \
+			  kernel/process \
+			  kernel/schedule
 
 KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/trap/trap.c \
@@ -36,7 +38,11 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/driver/ide.c \
 		kernel/fs/swapfs.c \
 		kernel/mm/swap.c \
-		kernel/mm/shmem.c
+		kernel/mm/shmem.c \
+		kernel/process/process.c \
+		kernel/schedule/schedule.c \
+		kernel/process/entry.S \
+		kernel/process/switch.S
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \

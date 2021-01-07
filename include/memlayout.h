@@ -22,8 +22,8 @@
 // 通过该地址访问内核页目录和页表
 #define VPT     0xFAC00000
 
-// #define K_STACK_TOP  KERNEL_BASE
-#define K_STACK_SIZE (8 * PAGE_SIZE)
+#define K_STACK_PAGE    2
+#define K_STACK_SIZE (K_STACK_PAGE * PAGE_SIZE)
 
 // 内核代码段
 #define SEG_KTEXT	1

@@ -6,6 +6,7 @@
 #include <intr.h>
 #include <assert.h>
 #include <atomic.h>
+// #include <schedule.h>
 
 static inline bool __intr_save(void) {
     if (read_eflags() & FL_IF) {
@@ -34,8 +35,13 @@ static inline bool try_lock(lock_t *lock) {
     return !test_and_set_bit(0, lock);
 }
 
+void schedule(void);
+
 static inline void lock(lock_t *lock) {
-    while(!try_lock(lock));
+    // may deadlock
+    while(!try_lock(lock)) {
+        schedule();
+    }
 }
 
 static inline void unlock(lock_t *lock) {

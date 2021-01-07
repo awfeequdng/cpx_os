@@ -19,6 +19,7 @@ struct PmmManager {
 };
 
 void pmm_init(void);
+void load_esp0(uintptr_t esp0);
 
 pde_t *get_boot_page_dir(void);
 

@@ -3,7 +3,7 @@
 
 #include <types.h>
 
-#define LOCK_PREFIX ""
+#define LOCK_PREFIX "lock "
 
 typedef struct {
     volatile int counter;
@@ -65,15 +65,15 @@ static inline int atomic_sub_return(atomic_t *v, int i) {
 }
 
 static inline void set_bit(int nr, volatile void *addr) {
-    asm volatile("btsl %1, %0" : "=m" (*(volatile long *)addr) : "Ir" (nr));
+    asm volatile(LOCK_PREFIX"btsl %1, %0" : "=m" (*(volatile long *)addr) : "Ir" (nr));
 }
 
 static inline void clear_bit(int nr, volatile void *addr) {
-    asm volatile("btrl %1, %0" : "=m" (*(volatile long *)addr) : "Ir" (nr));
+    asm volatile(LOCK_PREFIX"btrl %1, %0" : "=m" (*(volatile long *)addr) : "Ir" (nr));
 }
 
 static inline void change_bit(int nr, volatile void *addr) {
-    asm volatile("btcl %1, %0" : "=m" (*(volatile long *)addr) : "Ir" (nr));
+    asm volatile(LOCK_PREFIX"btcl %1, %0" : "=m" (*(volatile long *)addr) : "Ir" (nr));
 }
 
 // sbbl位带cf的减法
@@ -88,19 +88,19 @@ BT、BTS、BTR、BTC: 位测试指令
 */
 static inline bool test_and_set_bit(int nr, volatile void *addr) {
     int oldbit;
-    asm volatile("btsl %2, %1; sbbl %0, %0" : "=r" (oldbit), "=m"(*(volatile long *)addr) : "Ir" (nr) : "memory");
+    asm volatile(LOCK_PREFIX"btsl %2, %1; sbbl %0, %0" : "=r" (oldbit), "=m"(*(volatile long *)addr) : "Ir" (nr) : "memory");
     return oldbit != 0;
 }
 
 static inline bool test_and_clear_bit(int nr, volatile void * addr) {
     int oldbit;
-    asm volatile("btrl %2, %1; sbbl %0, %0" : "=r" (oldbit), "=m" (*(volatile long *)addr) : "Ir" (nr) : "memory");
+    asm volatile(LOCK_PREFIX"btrl %2, %1; sbbl %0, %0" : "=r" (oldbit), "=m" (*(volatile long *)addr) : "Ir" (nr) : "memory");
     return oldbit != 0;
 }
 
 static inline bool test_and_change_bit(int nr, volatile void *addr) {
     int oldbit;
-    asm volatile("btcl %2, %1; sbbl %0, %0" : "=r" (oldbit), "=m" (*(volatile long *)addr) : "Ir" (nr) : "memory");
+    asm volatile(LOCK_PREFIX"btcl %2, %1; sbbl %0, %0" : "=r" (oldbit), "=m" (*(volatile long *)addr) : "Ir" (nr) : "memory");
     return oldbit != 0;
 }
 

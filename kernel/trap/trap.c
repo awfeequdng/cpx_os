@@ -7,9 +7,14 @@
 #include <assert.h>
 #include <clock.h>
 #include <vmm.h>
+#include <process.h>
+#include <schedule.h>
+#include <unistd.h>
 
 // 100个tick就是1s
-#define TICK_HZ		100
+// #define TICK_HZ		100
+
+#define TICK_HZ		30
 
 static void print_hz() {
 	printk("%d ticks is 1 second\n", TICK_HZ);
@@ -25,7 +30,8 @@ void idt_init() {
 	extern uintptr_t __vectors[];
 	int i;
 	for (i = 0; i < ARRAY_SIZE(idt); i++) {
-		SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+		// SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+		SETGATE(idt[i], 1, GD_KTEXT, __vectors[i], DPL_KERNEL);
 	}
 	lidt(&idt_pd);
 }
@@ -58,6 +64,10 @@ static const char *trap_name(int trapno) {
     if (trapno < ARRAY_SIZE(trap_names)) {
         return trap_names[trapno];
     }
+	if (trapno == T_SYSCALL) {
+		return "System call";
+	}
+
     if (trapno >= IRQ_OFFSET && trapno < IRQ_OFFSET + 16) {
         return "Hardware Interrupt";
     }
@@ -148,7 +158,11 @@ static void trap_dispatch(struct TrapFrame *tf) {
 			tick++;
 			set_ticks(tick);
 			if (tick % TICK_HZ == 0) {
-				print_hz();
+				// print_hz();
+				printk("%d ticks\n", TICK_HZ);
+				assert(current != NULL);
+				// 将进程调度出去
+				current->need_resched = 1;
 			}
 			break;
 		case IRQ_OFFSET + IRQ_COM1:
@@ -176,5 +190,25 @@ static void trap_dispatch(struct TrapFrame *tf) {
 
 void trap(struct TrapFrame *tf)
 {
-	trap_dispatch(tf);
+	if (current == NULL) {
+		// used for previous projects
+		trap_dispatch(tf);
+	} else {
+		// keep a trapframe chain in stack
+		struct TrapFrame *otf = current->tf;
+		current->tf = tf;
+
+		bool in_kernel = trap_in_kernel(tf);
+
+		trap_dispatch(tf);
+
+		current->tf = otf;
+		if (!in_kernel) {
+			if (current->need_resched) {
+				// 中断结束前进行一次调度
+				schedule();
+			}
+		}
+	}
+
 }
