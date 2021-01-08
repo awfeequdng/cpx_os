@@ -2,11 +2,10 @@
 OBJ_DIR := obj
 TOOLS_DIR := tools
 TOP = .
-OBJ_DIRS :=
+# OBJ_DIRS :=
 KERNEL_INC = $(TOP) \
 			 kernel/ \
-			 lib/ \
-			 include/
+			 lib/
 
 ifndef COMPILE_PREFIX
 COMPILE_PREFIX := $(shell if objdump -i 2>&1 | grep 'elf32-i386' > /dev/null 2>&1; \
@@ -64,13 +63,19 @@ KERNEL_CFLAGS := $(CFLAGS) -DCPX_OS_KERNEL
 ASFLAGS = -m32
 
 
+# 用户态代码编译选项
+USER_PREFIX := 
+USER_CFLAGS :=
+USER_BINS :=
+
 IMAGES = $(OBJ_DIR)/kernel/cpx_os
 IMAGES_TMP = $(IMAGES)~
 KERNEL = $(OBJ_DIR)/kernel/kernel
 BOOT = $(OBJ_DIR)/boot/boot
 SWAPIMG = $(OBJ_DIR)/swap.img
 
-all: $(IMAGES) $(SWAPIMG)
+all: build
+# all: $(IMAGES) $(SWAPIMG)
 
 $(IMAGES): $(KERNEL) $(BOOT)
 	@echo + mk $@
@@ -82,9 +87,11 @@ $(IMAGES): $(KERNEL) $(BOOT)
 $(SWAPIMG):
 	$(V)dd if=/dev/zero of=$@ bs=1M count=128
 
+include user/Makefile.inc
 include boot/Makefile.inc
 include kernel/Makefile.inc
 
+build: $(USER_BINS) $(IMAGES) $(SWAPIMG)
 
 GDB_PORT = $(shell expr `id -u` % 5000 + 25000)
 
@@ -104,23 +111,23 @@ pre-qemu: .gdbinit
 
 
 
-qemu: $(IMAGES) $(SWAPIMG) pre-qemu
+qemu: all pre-qemu
 	$(QEMU)  $(QEMUOPTS)
 
-qemu-nox: $(IMAGES) $(SWAPIMG) pre-qemu
+qemu-nox: all pre-qemu
 	@echo "***"
 	@echo "*** Use Ctrl-a x to exit qemu"
 	@echo "***"
 	$(QEMU) -nographic  $(QEMUOPTS)
 
-qemu-gdb: $(IMAGES) $(SWAPIMG) pre-qemu
+qemu-gdb: all pre-qemu
 	@echo "***"
 	@echo "*** Now run 'make gdb'." 1>&2
 	@echo "***"
 	# 通过qemu的 -S -s参数让qemu启动内核后不执行，然后通过gdb进行调试
 	$(QEMU) $(QEMUOPTS) -S
 
-qemu-nox-gdb: $(IMAGES) $(SWAPIMG) pre-qemu
+qemu-nox-gdb: all pre-qemu
 	@echo "***"
 	@echo "*** Now run 'make gdb'." 1>&2
 	@echo "***"
@@ -128,7 +135,7 @@ qemu-nox-gdb: $(IMAGES) $(SWAPIMG) pre-qemu
 	$(QEMU) -nographic $(QEMUOPTS) -S
 
 TERMINAL := gnome-terminal
-debug: $(IMAGES) $(SWAPIMG) pre-qemu
+debug: all pre-qemu
 	$(V)$(QEMU) -S -s $(QEMUOPTS) &
 	$(V)sleep 2
 	$(V)$(TERMINAL) -e "gdb -n -x .gdbinit"

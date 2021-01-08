@@ -4,11 +4,19 @@
 #include <string.h>
 #include <x86.h>
 
-static const char *error_string[MAX_ERROR] = {
-	[E_INVAL] = "invalid parameter",
+static const char * const error_string[MAX_ERROR + 1] = {
+    [0]                     NULL,
+    [E_UNSPECIFIED]         "unspecified error",
+    [E_BAD_PROCESS]         "bad process",
+    [E_INVAL]               "invalid parameter",
+    [E_NO_MEM]              "out of memory",
+    [E_NO_FREE_PROCESS]     "out of processes",
+    [E_FAULT]               "segmentation fault",
+    [E_SWAP_FAULT]          "swap disk read/write fault",
+    [E_INVAL_ELF]           "invalid elf file",
+    [E_KILLED]              "process is killed",
+    [E_PANIC]               "panic failure",
 };
-
-
 
 static void printnum(void (*putc)(int, void*), void *putbuf,
 		unsigned long long num,

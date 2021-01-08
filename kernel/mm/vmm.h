@@ -7,6 +7,7 @@
 #include <sync.h>
 #include <rbtree.h>
 #include <shmem.h>
+#include <atomic.h>
 
 struct mm_struct;
 
@@ -41,6 +42,8 @@ typedef struct mm_struct {
     pde_t *page_dir;
     int map_count;
     uintptr_t swap_address;
+    atomic_t mm_count;
+    lock_t mm_lock;
 } MmStruct;
 
 // 當節點數量大於32時，採用紅黑樹將vma鏈接起來
@@ -64,6 +67,36 @@ void exit_mmap(MmStruct *mm);
 void vmm_init(void);
 
 int do_page_fault(MmStruct *m, uint32_t error_code, uintptr_t addr);
+
+bool user_mem_check(MmStruct *mm, uintptr_t start, size_t len, bool write);
+
+static inline int mm_count(MmStruct *mm) {
+    return atomic_read(&(mm->mm_count));
+}
+
+static inline void set_mm_count(MmStruct *mm, int val) {
+    atomic_set(&(mm->mm_count), val);
+}
+
+static inline int mm_count_inc(MmStruct *mm) {
+    return atomic_add_return(&(mm->mm_count), 1);
+}
+
+static inline int mm_count_dec(MmStruct *mm) {
+    return atomic_sub_return(&(mm->mm_count), 1);
+}
+
+static inline void lock_mm(MmStruct *mm) {
+    if (mm != NULL) {
+        lock(&(mm->mm_lock));
+    } 
+}
+
+static inline void unlock_mm(MmStruct *mm) {
+    if (mm != NULL) {
+        unlock(&(mm->mm_lock));
+    }
+}
 
 void print_vma(void);
 

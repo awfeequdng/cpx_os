@@ -1,5 +1,5 @@
-#include <include/x86.h>
-#include <include/elf.h>
+#include <x86.h>
+#include <elf.h>
 
 #define PHY_ELF_ADDR	0x10000
 #define SECT_SIZE	512

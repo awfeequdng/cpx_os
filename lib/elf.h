@@ -47,4 +47,13 @@ struct SectHeader {
 };
 
 
+// program type
+#define ELF_PT_LOAD					1
+
+// program flags
+#define ELF_PF_X					1
+#define ELF_PF_W					2
+#define ELF_PF_R					4
+
+
 #endif // __INCLUDE_ELF_H__

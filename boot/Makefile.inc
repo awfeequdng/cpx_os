@@ -1,5 +1,6 @@
 
-OBJ_DIRS += boot
+# OBJ_DIRS += boot
+
 BOOT_OBJS := $(OBJ_DIR)/boot/boot.o $(OBJ_DIR)/boot/bootmain.o
 
 $(OBJ_DIR)/boot/%.o: boot/%.c

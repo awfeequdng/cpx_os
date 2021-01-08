@@ -10,6 +10,8 @@
 #include <process.h>
 #include <schedule.h>
 #include <unistd.h>
+#include <syscall.h>
+#include <error.h>
 
 // 100个tick就是1s
 // #define TICK_HZ		100
@@ -30,9 +32,12 @@ void idt_init() {
 	extern uintptr_t __vectors[];
 	int i;
 	for (i = 0; i < ARRAY_SIZE(idt); i++) {
+		// todo: 为什么要改，不改行不行
 		// SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
 		SETGATE(idt[i], 1, GD_KTEXT, __vectors[i], DPL_KERNEL);
 	}
+	// 0x80陷阱门的权限为3，当发生中断时，会发生权限提升
+	SETGATE(idt[T_SYSCALL], 1, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
 	lidt(&idt_pd);
 }
 
@@ -133,11 +138,19 @@ static void print_page_fault(struct TrapFrame *tf) {
 
 static int page_fault_handler(struct TrapFrame *tf) {
 	extern MmStruct *check_mm_struct;
-	// print_page_fault(tf);
+	MmStruct *mm = NULL;
 	if (check_mm_struct != NULL) {
-		return do_page_fault(check_mm_struct, tf->tf_err, rcr2());
+		assert(current == idle_process);
+		mm = check_mm_struct;
+	} else {
+		if (current == NULL) {
+			print_trap_frame(tf);
+			print_page_fault(tf);
+			panic("unhandled page fault.\n");
+		}
+		mm = current->mm;
 	}
-	panic("unhandled page fault.\n");
+	return do_page_fault(check_mm_struct, tf->tf_err, rcr2());
 }
 
 static void trap_dispatch(struct TrapFrame *tf) {
@@ -149,8 +162,20 @@ static void trap_dispatch(struct TrapFrame *tf) {
 		case T_PG_FAULT:
 			if ((ret = page_fault_handler(tf)) != 0) {
 				print_trap_frame(tf);
-				panic("handle page fault failed. %e\n", ret);
+				if (current == NULL) {
+					panic("handle page fault failed. %e\n", ret);
+				} else {
+					if (trap_in_kernel(tf)) {
+						panic("handle page fault failed in kernel mode. %e\n", ret);
+					}
+					// todo: 为什么是被kill掉的？？
+					printk("killed by kernel.\n");
+					do_exit(-E_KILLED);
+				}
 			}
+			break;
+		case T_SYSCALL:
+			syscall();
 			break;
 		case IRQ_OFFSET + IRQ_TIMER:
 			// printk("fall in irq timer\n");
@@ -180,11 +205,12 @@ static void trap_dispatch(struct TrapFrame *tf) {
         	/* do nothing */
         	break;
 		default:
-			// 中断是在内核态产生的，这是一个错误（why？）, todo:
-			if ((tf->tf_cs & 3) == 0) {
-				print_trap_frame(tf);
-				panic("unexpected trap in kernel.\n");
+			print_trap_frame(tf);
+			if (current != NULL) {
+				printk("unhandled trap.\n");
+				do_exit(-E_KILLED);
 			}
+			panic("unexpected trap in kernel.\n");
 	}
 }
 

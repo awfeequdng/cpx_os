@@ -10,6 +10,7 @@
 #include <error.h>
 #include <stdio.h>
 #include <schedule.h>
+#include <elf.h>
 
 list_entry_t process_list;
 
@@ -172,12 +173,61 @@ static void put_kstack(Process *process) {
     free_pages(kva2page((void *)process->kstack), K_STACK_PAGE);
 }
 
+
+static int setup_page_dir(MmStruct *mm) {
+    struct Page *page = NULL;
+    if ((page = alloc_page()) == NULL) {
+        return -E_NO_MEM;
+    }
+    pde_t *page_dir = page2kva(page);
+    memcpy(page_dir, get_boot_page_dir(), PAGE_SIZE);
+    page_dir[PDX(VPT)] = PADDR(page_dir) | PTE_P | PTE_W;
+    mm->page_dir = page_dir;
+    return 0;
+}
+
 // 根据clone_flags标志是否复制或者共享当前的进程'current'
 static int copy_mm(uint32_t clone_flags, Process *process) {
-    assert(current->mm == NULL);
-    // 暂时未实现
-    // todo: 
+    MmStruct *mm= NULL;
+    MmStruct *old_mm = current->mm;
+    if (old_mm == NULL) {
+        return 0;
+    }
+    if (clone_flags & CLONE_VM) {
+        // 设置了CLONE_VM标志，则两个进程使用同一个mm
+        mm = old_mm;
+        goto good_mm;
+    }
+    int ret = -E_NO_MEM;
+    if ((mm = mm_create()) == NULL) {
+        goto bad_mm;
+    }
+
+    if (setup_page_dir(mm) != 0) {
+        goto bad_page_dir_cleanup_mm;
+    }
+
+    lock_mm(old_mm);
+    {
+        ret = dup_mmap(mm, old_mm);
+    }
+    unlock_mm(old_mm);
+
+    if (ret != 0) {
+        goto bad_dup_cleanup_mmap;
+    }
+
+good_mm:
+    mm_count_inc(mm);
+    process->mm = mm;
+    process->page_dir = mm->page_dir;
     return 0;
+bad_dup_cleanup_mmap:
+
+bad_page_dir_cleanup_mm:
+
+bad_mm:
+    return ret;
 }
 
 static void copy_thread(Process *process, uintptr_t esp, struct TrapFrame *tf) {
@@ -240,15 +290,270 @@ bad_fork_cleanup_process:
 
 
 int do_exit(int error_code) {
-    // panic("process exit.\n");
+    if (current == idle_process) {
+        panic("idle_process exit.\n");
+    }
+    if (current == init_process) {
+        panic("init_process exit.\n");
+    }
+
     panic("process exit, pid = %d, error_code = %d\n", current->pid, error_code);
 }
+
+static void put_page_dir(MmStruct *mm) {
+    free_page(kva2page(mm->page_dir));
+}
+
+// load_icode -  called by sys_exec-->do_execve
+// 1. create a new mm for current process
+// 2. create a new PDT, and mm->pgdir= kernel virtual addr of PDT
+// 3. copy TEXT/DATA/BSS parts in binary to memory space of process
+// 4. call mm_map to setup user stack, and put parameters into user stack
+// 5. setup trapframe for user environment
+static int load_icode(unsigned char *binary, size_t size) {
+    if (current->mm != NULL) {
+        panic("load_icode: current->mm must be empty.\n");
+    }
+
+    int ret = -E_NO_MEM;
+
+    MmStruct *mm = NULL;
+
+    if ((mm = mm_create()) == NULL) {
+        goto bad_mm;
+    }
+
+    if (setup_page_dir(mm) != 0) {
+        goto bad_page_dir_cleanup_mm;
+    }
+
+    struct Page *page = NULL;
+    struct Elf *elf = (struct Elf*)binary;
+    struct ProgHeader *ph = (struct ProgHeader *)(binary + elf->e_phoff);
+    if (elf->e_magic != ELF_MAGIC) {
+        ret = -E_INVAL_ELF;
+        goto bad_elf_cleanup_page_dir;
+    }
+    uint32_t vm_flags, perm;
+    struct ProgHeader *ph_end = ph + elf->e_phnum;
+    for (; ph < ph_end; ph++) {
+        if (ph->p_type != ELF_PT_LOAD) {
+            // 不是可加载的program 段
+            continue;
+        }
+        // file size 和mem size的关系是什么？
+        // todo: 
+        if (ph->p_filesz > ph->p_memsz) {
+            ret = -E_INVAL_ELF;
+            goto bad_cleanup_mmap;
+        }
+        if (ph->p_filesz == 0) {
+            continue;
+        }
+        vm_flags = 0;
+        // 用户态程序
+        perm = PTE_U;
+        if (ph->p_flags & ELF_PF_X) {
+            vm_flags |= VM_EXEC;
+        }
+        if (ph->p_flags & ELF_PF_W) {
+            vm_flags |= VM_WRITE;
+        }
+        if (ph->p_flags & ELF_PF_R) {
+            vm_flags |= VM_READ;
+        }
+        if (vm_flags & VM_WRITE) {
+            perm |= PTE_W;
+        }
+        if ((ret = mm_map(mm, ph->p_va, ph->p_memsz, vm_flags, NULL)) != 0) {
+            goto bad_cleanup_mmap;
+        }
+
+        unsigned char *from = binary + ph->p_offset;
+        size_t off, size;
+        uintptr_t start = ph->p_va;
+        uintptr_t end;
+        uintptr_t va = ROUNDDOWN(start, PAGE_SIZE);
+        ret = -E_NO_MEM;
+
+        end = ph->p_va + ph->p_filesz;
+        // 将可加载段段的内容拷贝到对应的vma
+        while (start < end) {
+            if ((page = page_dir_alloc_page(mm->page_dir, va, perm)) == NULL) {
+                goto bad_cleanup_mmap;
+            }
+            off = start - va;
+            size = PAGE_SIZE - off;
+            va += PAGE_SIZE;
+            if (end < va) {
+                size -= (va - end);
+            }
+            memcpy(page2kva(page) + off, from, size);
+            start += size;
+            from += size;
+        }
+        end = ph->p_va + ph->p_memsz;
+
+        // start到va(va是页边界)还有有段空缺的内容没有使用
+        if (start < va) {
+            if (start == end) {
+                // 可执行文件中的filesz和memsz大小相等
+                continue;
+            }
+            // 可加载段的filesz和memsz的大小不相等，memsz大于filesz，
+            // 说明filesz到memsz之间需要填充零
+            // bss段就是filesz为0，而memsz为未初始化全局变量和局部静态变量的总大小
+            off = start + PAGE_SIZE - va;
+            size = PAGE_SIZE - off;
+            if (end < va) {
+                size -= (va - end);
+            }
+            memset(page2kva(page) + off, 0, size);
+            start += size;
+            assert((end < va && start == end) || (end >= va && start == va));
+        }
+
+        while (start < end) {
+            if ((page = page_dir_alloc_page(mm->page_dir, va, perm)) == NULL) {
+                goto bad_cleanup_mmap;
+            }
+            off = start - va;
+            size = PAGE_SIZE - off;
+            va += PAGE_SIZE;
+            if (end < va) {
+                size -= (va - end);
+            }
+            memset(page2kva(page) + off, 0, size);
+            start += size;
+        }
+    }
+    vm_flags = VM_READ | VM_WRITE | VM_STACK;
+    // 设置堆栈的vma以及权限
+    if ((ret = mm_map(mm, USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP, vm_flags, NULL)) != 0) {
+        goto bad_cleanup_mmap;
+    }
+
+    mm_count_inc(mm);
+    current->mm = mm;
+    current->page_dir = mm->page_dir;
+    lcr3(PADDR(mm->page_dir));
+
+    struct TrapFrame *tf = current->tf;
+    memset(tf, 0, sizeof(struct TrapFrame));
+
+    tf->tf_cs = USER_CS;
+    tf->tf_ds = USER_DS;
+    tf->tf_es = USER_DS;
+    tf->tf_ss = USER_DS;
+    tf->tf_esp = USER_STACK_TOP;
+    tf->tf_eip = elf->e_entry;
+    tf->tf_eflags = FL_IF;
+    ret = 0;
+out:
+    return ret;
+bad_cleanup_mmap:
+    exit_mmap(mm);
+bad_elf_cleanup_page_dir:
+    put_page_dir(mm);
+bad_page_dir_cleanup_mm:
+    mm_destory(mm);
+bad_mm:
+    return ret;
+}
+
+int do_execve(const char *name, size_t len, unsigned char *binary, size_t size) {
+    MmStruct *mm = current->mm;
+    if (!user_mem_check(mm, (uintptr_t)name, len, 0)) {
+        return -E_INVAL;
+    }
+
+    if (len > PROCESS_NAME_LEN) {
+        len = PROCESS_NAME_LEN;
+    }
+
+    char local_name[PROCESS_NAME_LEN + 1];
+    memset(local_name, 0, sizeof(local_name));
+    memcpy(local_name, name, len);
+    
+    if (mm != NULL) {
+        // 切换到内核地址空间，因为进程mm要被释放掉了
+        lcr3(PADDR(get_boot_page_dir()));
+        if (mm_count_dec(mm) == 0) {
+            // 释放所有页表项映射的page，以及释放所有的页表，最后只留下一个页目录
+            exit_mmap(mm);
+            // 将页目录也是释放掉
+            put_page_dir(mm);
+            // 释放所有vma结构以及mm结构
+            mm_destory(mm);
+        }
+        current->mm = NULL;
+    }
+
+    int ret;
+    // 加载新的进程地址空间到current
+    if ((ret = load_icode(binary, size)) != 0) {
+        goto execve_exit;
+    }
+    set_process_name(current, local_name);
+    return 0;
+
+execve_exit:
+    do_exit(ret);
+    panic("already exit: %e.\n", ret);
+}
+
+int do_yield(void) {
+    current->need_resched = 1;
+    return 0;
+}
+
+// exec系统调用接口
+static int kernel_execve(const char *name, unsigned char *binary, size_t size) {
+    int len = strlen(name);
+    int ret;
+    // int 0x80;
+    // eax = 4(SYS_exec)
+    // edx = name
+    // ecx = len
+    // ebx = binary
+    // edi = size
+    asm volatile ("int %1;"
+                  : "=a" (ret)
+                  : "i" (T_SYSCALL), "0" (SYS_exec), "d" (name), "c" (len), "b" (binary), "D" (size)
+                  : "memory");
+    return ret;
+}
+
+#define __KERNEL_EXECVE(name, binary, size) ({                  \
+            printk("kernel_execve: pid = %d, name = \"%s\".\n", \
+                   current->pid, name); \
+            kernel_execve(name, binary, (size_t)(size)); \
+})
+
+#define KERNEL_EXECVE(x) ({ \
+            extern unsigned char _binary_obj_user_##x##_start[],   \
+                _binary_obj_user_##x##_size[];     \
+            __KERNEL_EXECVE(#x, _binary_obj_user_##x##_start,  \
+                            _binary_obj_user_##x##_size);     \
+        })
+
+#define __KERNEL_EXECVE2(x, xstart, xsize)  ({ \
+            extern unsigned char xstart[], xsize;   \
+            __KERNEL_EXECVE(#x, xstart, (size_t)xsize);\
+    })
+
+#define KERNEL_EXECVE2(x, xstart, xsize)    __KERNEL_EXECVE2(x, xstart, xsize)
 
 static int init_main(void *arg) {
     printk("this init_process, pid = %d, name = \"%s\"\n", current->pid, get_process_name(current));
     printk("To U: \"%s\".\n", (char *)arg);
     printk("To U: \"en.., Bye, Bye. :)\"\n");
-    // while (1);
+#ifdef TEST
+    KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
+#else
+    KERNEL_EXECVE(hello);
+#endif
+    panic("kernel_execve failed.\n");
     return 0;
 }
 
@@ -293,3 +598,4 @@ void cpu_idle(void) {
         }
     }
 }
+

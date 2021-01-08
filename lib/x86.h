@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_X86_H__
 #define __INCLUDE_X86_H__
 
-#include <include/types.h>
+#include <types.h>
 
 /* Pseudo-descriptors used for LGDT, LLDT(not used) and LIDT instructions. */
 struct PseudoDescriptor {

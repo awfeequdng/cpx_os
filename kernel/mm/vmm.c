@@ -6,6 +6,8 @@
 #include <sync.h>
 #include <error.h>
 #include <swap.h>
+#include <string.h>
+#include <process.h>
 
 static int vma_compare(rbtree_node_t *node1, rbtree_node_t *node2) {
     VmaStruct *vma1 = rbn2vma(node1, rb_link);
@@ -24,6 +26,8 @@ MmStruct *mm_create(void) {
         rbtree_init(&(mm->mmap_tree), vma_compare);
         mm->map_count = 0;
         mm->swap_address = 0;
+        set_mm_count(mm, 0);
+        lock_init(&(mm->mm_lock));
     }
 
     return mm;
@@ -270,6 +274,7 @@ int mm_map_shmem(MmStruct *mm, uintptr_t addr, uint32_t vm_flags,
 }
 
 // 检查用户空间的内存是否可写（write为true），或者可读（write为false）
+// todo: 有些没看懂
 bool user_mem_check(MmStruct *mm, uintptr_t addr, size_t len, bool write) {
     if (mm != NULL) {
         if (!USER_ACCESS(addr, addr + len)) {
@@ -500,7 +505,7 @@ int dup_mmap(MmStruct *to, MmStruct *from) {
 
 // 删除vma映射的物理页，以及所有页表，只留下一个页目录
 void exit_mmap(MmStruct *mm) {
-    assert(mm != NULL);
+    assert(mm != NULL && mm_count(mm) == 0);
     pde_t *page_dir = mm->page_dir;
     list_entry_t *head = &(mm->mmap_link);
     list_entry_t *entry = head;
@@ -618,6 +623,12 @@ static void check_page_fault() {
 }
 
 int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
+    if (mm == NULL) {
+        assert(current != NULL);
+        panic("page fault in kernel thread: pid = %d, %d %08x.\n",
+            current->pid, error_code, addr);
+    }
+    lock_mm(mm);
     int ret = -E_INVAL;
 
     VmaStruct *vma = find_vma(mm, addr);
@@ -779,6 +790,7 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
     ret = 0;
 
 failed:
+    unlock_mm(mm);
     return ret;
 }
 

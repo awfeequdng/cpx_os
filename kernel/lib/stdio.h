@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_STDIO_H__
 #define __INCLUDE_STDIO_H__
 
-#include <include/stdarg.h>
+#include <stdarg.h>
 
 // stdio.c
 void putchar(int c);

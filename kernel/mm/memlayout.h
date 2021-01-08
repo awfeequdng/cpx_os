@@ -8,8 +8,16 @@
 #define KERNEL_TOP      (KERNEL_BASE + KERNEL_MEM_SIZE)
 
 #define USER_TOP        0xB0000000
+#define USER_STACK_TOP  USER_TOP
+// 用户栈空间大小为1M
+#define USER_STACK_PAGE 256
+#define USER_STACK_SIZE (USER_STACK_PAGE * PAGE_SIZE)
 
 #define USER_BASE       0x00200000
+// 用户程序的加载地址
+#define USER_TEXT       0x00800000
+// 用户程序的stabs数据结构的位置
+#define USER_STAB       USER_BASE
 
 // [start, end)
 #define USER_ACCESS(start, end)     \

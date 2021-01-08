@@ -1,5 +1,5 @@
 
-OBJ_DIRS += kernel
+# OBJ_DIRS += kernel
 
 KERNEL_LDFLAGS := $(LDFLAGS) -T $(TOOLS_DIR)/kernel.ld -nostdlib
 
@@ -13,7 +13,8 @@ KERNEL_INC += kernel/driver \
 			  kernel/sync \
 			  kernel/fs \
 			  kernel/process \
-			  kernel/schedule
+			  kernel/schedule \
+			  kernel/syscall
 
 KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/trap/trap.c \
@@ -26,6 +27,7 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/debug/kdebug.c \
 		kernel/driver/pic_irq.c \
 		kernel/lib/stdio.c \
+		kernel/lib/readline.c \
 		kernel/debug/panic.c \
 		kernel/driver/clock.c \
 		kernel/mm/pmm.c \
@@ -42,12 +44,12 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/process/process.c \
 		kernel/schedule/schedule.c \
 		kernel/process/entry.S \
-		kernel/process/switch.S
+		kernel/process/switch.S \
+		kernel/syscall/syscall.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \
 		lib/printfmt.c \
-		lib/readline.c \
 		lib/rand.c \
 		lib/hash.c
 
@@ -74,7 +76,7 @@ $(OBJ_DIR)/vector.o: $(TOOLS_DIR)/vector.c
 
 $(OBJ_DIR)/kernel/kernel: $(KERNEL_OBJ_FILES) $(KERNEL_LIB_OBJ_FILES) $(OBJ_DIR)/vector.o
 	@echo + ld $@
-	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $^ 
+	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $^ -b binary $(USER_BINS)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
 
