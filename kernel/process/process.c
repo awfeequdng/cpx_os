@@ -294,7 +294,7 @@ int do_exit(int error_code) {
         panic("idle_process exit.\n");
     }
     if (current == init_process) {
-        panic("init_process exit.\n");
+        panic("init_process exit. pid = %d, error_code = %d\n", current->pid, error_code);
     }
 
     panic("process exit, pid = %d, error_code = %d\n", current->pid, error_code);
@@ -377,6 +377,7 @@ static int load_icode(unsigned char *binary, size_t size) {
         ret = -E_NO_MEM;
 
         end = ph->p_va + ph->p_filesz;
+        printk("[start, end) = [%08x, %08x)\n", start, end);
         // 将可加载段段的内容拷贝到对应的vma
         while (start < end) {
             if ((page = page_dir_alloc_page(mm->page_dir, va, perm)) == NULL) {
@@ -429,7 +430,7 @@ static int load_icode(unsigned char *binary, size_t size) {
     }
     vm_flags = VM_READ | VM_WRITE | VM_STACK;
     // 设置堆栈的vma以及权限
-    if ((ret = mm_map(mm, USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP, vm_flags, NULL)) != 0) {
+    if ((ret = mm_map(mm, USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, vm_flags, NULL)) != 0) {
         goto bad_cleanup_mmap;
     }
 
@@ -448,6 +449,7 @@ static int load_icode(unsigned char *binary, size_t size) {
     tf->tf_esp = USER_STACK_TOP;
     tf->tf_eip = elf->e_entry;
     tf->tf_eflags = FL_IF;
+    printk("tf_eip = 0x%08x\n", tf->tf_eip);
     ret = 0;
 out:
     return ret;
@@ -495,6 +497,7 @@ int do_execve(const char *name, size_t len, unsigned char *binary, size_t size) 
         goto execve_exit;
     }
     set_process_name(current, local_name);
+    printk("current pid = %d, name = %s\n", current->pid, current->name);
     return 0;
 
 execve_exit:

@@ -85,7 +85,7 @@ void start_kernel(void)
 	ide_init();
 	swap_init();
 
-	clock_init();
+	// clock_init();
 
 	// 开启总中断
 	intr_enable();

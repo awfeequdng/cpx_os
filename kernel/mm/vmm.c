@@ -795,11 +795,15 @@ failed:
 }
 
 void print_vma(void) {
-    if (check_mm_struct == NULL || check_mm_struct->map_count == 0) {
+    // if (check_mm_struct == NULL || check_mm_struct->map_count == 0) {
+    //     return;
+    // }
+    if (current == NULL || current->mm == NULL || current->mm->map_count == 0) {
         return;
     }
+    MmStruct *mm = current->mm;
     VmaStruct *vma = NULL;
-    list_entry_t *head = &(check_mm_struct->mmap_link);
+    list_entry_t *head = &(mm->mmap_link);
     list_entry_t *entry = list_next(head);
     while (entry != head) {
         vma = le2vma(entry, vma_link);

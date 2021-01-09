@@ -150,7 +150,7 @@ static int page_fault_handler(struct TrapFrame *tf) {
 		}
 		mm = current->mm;
 	}
-	return do_page_fault(check_mm_struct, tf->tf_err, rcr2());
+	return do_page_fault(mm, tf->tf_err, rcr2());
 }
 
 static void trap_dispatch(struct TrapFrame *tf) {
