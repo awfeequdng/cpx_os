@@ -46,7 +46,7 @@ int sys_getpid(void) {
 }
 
 int sys_putc(int c) {
-    return syscall(SYS_putc);
+    return syscall(SYS_putc, c);
 }
 
 int sys_page_dir(void) {
