@@ -168,7 +168,7 @@ static void trap_dispatch(struct TrapFrame *tf) {
 					if (trap_in_kernel(tf)) {
 						panic("handle page fault failed in kernel mode. %e\n", ret);
 					}
-					// todo: 为什么是被kill掉的？？
+					// 在不能处理page_fault时，进程将要被杀死
 					printk("killed by kernel.\n");
 					do_exit(-E_KILLED);
 				}

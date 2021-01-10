@@ -232,6 +232,10 @@ static int copy_mm(uint32_t clone_flags, Process *process) {
     }
 
 good_mm:
+    if (mm != old_mm) {
+        mm->brk_start = old_mm->brk_start;
+        mm->brk = old_mm->brk;
+    }
     mm_count_inc(mm);
     process->mm = mm;
     process->page_dir = mm->page_dir;
@@ -455,7 +459,10 @@ static int load_icode(unsigned char *binary, size_t size) {
         if ((ret = mm_map(mm, ph->p_va, ph->p_memsz, vm_flags, NULL)) != 0) {
             goto bad_cleanup_mmap;
         }
-
+        // brk_start的值为从加载程序的最后的一个地址开始（以页向上对齐）
+        if (mm->brk_start < ph->p_va + ph->p_memsz) {
+            mm->brk_start = ph->p_va + ph->p_memsz;
+        }
         unsigned char *from = binary + ph->p_offset;
         size_t off, size;
         uintptr_t start = ph->p_va;
@@ -515,6 +522,9 @@ static int load_icode(unsigned char *binary, size_t size) {
             start += size;
         }
     }
+    // brk == brk_start说明还没有分配任何堆内存
+    mm->brk_start = mm->brk = ROUNDUP(mm->brk_start, PAGE_SIZE);
+
     vm_flags = VM_READ | VM_WRITE | VM_STACK;
     // 设置堆栈的vma以及权限
     if ((ret = mm_map(mm, USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, vm_flags, NULL)) != 0) {
@@ -682,6 +692,59 @@ int do_kill(int pid) {
     return -E_INVAL;
 }
 
+int do_brk(uintptr_t *brk_store) {
+    MmStruct *mm = current->mm;
+    if (mm == NULL) {
+        // mm为NULL表明当前为内核线程（内核线程没有mm结构）
+        panic("kernel thread call sys_brk!.\n");
+    }
+    if (brk_store == NULL) {
+        return -E_INVAL;
+    }
+    if (!user_mem_check(mm, (uintptr_t)brk_store, sizeof(uintptr_t), 1)) {
+        return -E_INVAL;
+    }
+    // 希望申请的新的brk的值
+    uintptr_t brk = *brk_store;
+
+    if (brk < mm->brk_start) {
+        goto out;
+    }
+    uintptr_t new_brk = ROUNDUP(brk, PAGE_SIZE);
+    uintptr_t old_brk = mm->brk;
+    assert(old_brk % PAGE_SIZE == 0);
+    // 新申请的brk在之前申请的brk范围之内，并且有相同的上边界（按页对齐）
+    if (new_brk == old_brk) {
+        goto out;
+    }
+
+    lock_mm(mm);
+    if (new_brk < old_brk) {
+        // 释放[new_brk, old_brk)这部分的vma
+        if (mm_unmap(mm, new_brk, old_brk - new_brk) != 0) {
+            goto out_unlock;
+        }
+    } else {
+        // 申请内存
+        // todo: 为什么上边界为new_brk + PAGE_SIZE，是为了留一个page的缓冲区吗？以保护堆栈段
+        if (find_vma_intersection(mm, old_brk, new_brk + PAGE_SIZE) != NULL) {
+            goto out_unlock;
+        }
+        if (mm_brk(mm, old_brk, new_brk - old_brk) != 0) {
+            goto out_unlock;
+        }
+    }
+
+    mm->brk = new_brk;
+
+out_unlock:
+    unlock_mm(mm);
+
+out:
+    *brk_store = mm->brk;
+    return 0;
+}
+
 // exec系统调用接口
 static int kernel_execve(const char *name, unsigned char *binary, size_t size) {
     int len = strlen(name);
@@ -724,7 +787,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(exit);
+    KERNEL_EXECVE(bad_brk_test);
 #endif
     panic("user_main execve failed.\n");
 }

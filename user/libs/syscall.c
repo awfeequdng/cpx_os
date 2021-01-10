@@ -53,6 +53,10 @@ int sys_getpid(void) {
     return syscall(SYS_getpid);
 }
 
+int sys_brk(uintptr_t *brk_store) {
+    return syscall(SYS_brk, brk_store);
+}
+
 int sys_putc(int c) {
     return syscall(SYS_putc, c);
 }

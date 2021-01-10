@@ -28,6 +28,7 @@ MmStruct *mm_create(void) {
         mm->swap_address = 0;
         set_mm_count(mm, 0);
         lock_init(&(mm->mm_lock));
+        mm->brk_start = mm->brk = 0;
     }
 
     return mm;
@@ -100,6 +101,18 @@ VmaStruct *find_vma(MmStruct *mm, uintptr_t addr) {
     return vma;
 }
 
+// 找一个地址和[start, end)有交叉的vma
+VmaStruct *find_vma_intersection(MmStruct *mm, uintptr_t start, uintptr_t end) {
+    VmaStruct *vma = find_vma(mm, start);
+    if (vma != NULL && end <= vma->vm_start) {
+        // vma地址和[start, end)没有交叉
+        vma = NULL;
+    }
+    return vma;
+}
+
+
+
 static inline void check_vma_overlap(VmaStruct *prev, VmaStruct *next) {
     assert(prev->vm_start < prev->vm_end);
     assert(prev->vm_end <= next->vm_start);
@@ -169,6 +182,34 @@ void insert_vma_struct(MmStruct *mm, VmaStruct *vma) {
             insert_vma_rb(&(mm->mmap_tree), le2vma(entry, vma_link), NULL);
         }
     }
+}
+
+// 申请[addr, addr + len)这块地址作为堆内存使用
+int mm_brk(MmStruct *mm, uintptr_t addr, size_t len) {
+    uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
+    uintptr_t end = ROUNDUP(addr + len, PAGE_SIZE);
+    if (!USER_ACCESS(start, end)) {
+        return -E_INVAL;
+    }
+
+    int ret;
+    // todo: 为什么需要unmap？
+    if ((ret = mm_unmap(mm, start, end - start)) != 0) {
+        return ret;
+    }
+
+    uint32_t vm_flags = VM_READ | VM_WRITE;
+    VmaStruct *vma = find_vma(mm, start - 1);
+    if (vma != NULL && vma->vm_end == start && vma->vm_flags == vm_flags) {
+        // [start, end)之前的vma与[start, end)正好相邻，并且vm_flags也相同，则直接将之前的vma扩大以下end地址范围即可
+        vma->vm_end = end;
+        return 0;
+    }
+    if ((vma = vma_create(start, end, vm_flags)) == NULL) {
+        return -E_NO_MEM;
+    }
+    insert_vma_struct(mm, vma);
+    return 0;
 }
 
 static int remove_vma_struct(MmStruct *mm, VmaStruct *vma) {

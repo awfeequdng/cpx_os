@@ -13,9 +13,13 @@ USER_SRC_FILES := user/libs/init_code.S \
         user/libs/syscall.c \
         user/libs/ulib.c \
         user/libs/umain.c \
-		user/libs/panic.c
+		user/libs/panic.c \
+		user/libs/malloc.c
 
 USER_BINS_SRC_FILES := \
+		user/bad_brk_test.c \
+		user/fork_tree.c \
+		user/fork_test.c \
 		user/exit.c \
 		user/test_bss.c \
 		user/hello.c \
@@ -55,6 +59,9 @@ $(USER_BINS): $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(USER_OBJ_BINS_FILES)
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)yield $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/yield.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)test_bss $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/test_bss.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)exit $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/exit.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)fork_test $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/fork_test.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)fork_tree $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/fork_tree.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)bad_brk_test $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/bad_brk_test.o
 
 # $(OBJ_DIR)/lib/%.o:
 

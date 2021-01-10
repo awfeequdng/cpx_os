@@ -44,6 +44,8 @@ typedef struct mm_struct {
     uintptr_t swap_address;
     atomic_t mm_count;
     lock_t mm_lock;
+    uintptr_t brk_start;
+    uintptr_t brk;
 } MmStruct;
 
 // 當節點數量大於32時，採用紅黑樹將vma鏈接起來
@@ -52,7 +54,8 @@ typedef struct mm_struct {
 VmaStruct *find_vma(MmStruct *mm, uintptr_t addr);
 VmaStruct *vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_flags);
 void insert_vma_struct(MmStruct *mm, VmaStruct *vma);
-
+VmaStruct *find_vma_intersection(MmStruct *mm, uintptr_t start, uintptr_t end);
+int mm_brk(MmStruct *mm, uintptr_t addr, size_t len);
 MmStruct *mm_create(void);
 void mm_destory(MmStruct *mm);
 
