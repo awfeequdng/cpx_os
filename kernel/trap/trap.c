@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <syscall.h>
 #include <error.h>
+#include <schedule.h>
 
 // 100个tick就是1s
 // #define TICK_HZ		100
@@ -182,9 +183,10 @@ static void trap_dispatch(struct TrapFrame *tf) {
 			tick = get_ticks();
 			tick++;
 			set_ticks(tick);
+			run_timer_list();
 			if (tick % TICK_HZ == 0) {
 				// print_hz();
-				printk("%d ticks\n", TICK_HZ);
+				// printk("%d ticks\n", tick);
 				assert(current != NULL);
 				// 将进程调度出去
 				current->need_resched = 1;

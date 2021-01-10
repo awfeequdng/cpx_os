@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <unistd.h>
-
+#include <clock.h>
 
 static uint32_t sys_exit(uint32_t arg[]) {
     int error_code = (int)arg[0];
@@ -33,6 +33,15 @@ static uint32_t sys_exec(uint32_t arg[]) {
 static uint32_t sys_kill(uint32_t arg[]) {
     int32_t pid = (int32_t)arg[0];
     return do_kill(pid);
+}
+
+static uint32_t sys_sleep(uint32_t arg[]) {
+    unsigned int time = (unsigned int)arg[0];
+    return do_sleep(time);
+}
+
+static uint32_t sys_gettime(uint32_t arg[]) {
+    return get_ticks();
 }
 
 static uint32_t sys_yield(uint32_t arg[]) {
@@ -68,6 +77,8 @@ static uint32_t (*syscalls[])(uint32_t arg[]) = {
     [SYS_kill] = sys_kill,
     [SYS_getpid] = sys_getpid,
     [SYS_brk] = sys_brk,
+    [SYS_sleep] = sys_sleep,
+    [SYS_gettime] = sys_gettime,
     [SYS_putc] = sys_putc,
     [SYS_pgdir] = sys_page_dir,
 };

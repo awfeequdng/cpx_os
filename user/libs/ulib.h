@@ -24,6 +24,8 @@ void exit(int error_code) __attribute__((noreturn));
 int fork(void);
 int wait(void);
 int waitpid(int pid, int *store);
+int sleep(unsigned int time);
+unsigned int gettime_msec(void);
 void yield(void);
 int kill(int pid);
 int getpid(void);

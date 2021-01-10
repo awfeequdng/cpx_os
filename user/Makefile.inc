@@ -17,6 +17,8 @@ USER_SRC_FILES := user/libs/init_code.S \
 		user/libs/malloc.c
 
 USER_BINS_SRC_FILES := \
+		user/sleep.c \
+		user/bad_arg.c \
 		user/bad_brk_test.c \
 		user/fork_tree.c \
 		user/fork_test.c \
@@ -62,6 +64,8 @@ $(USER_BINS): $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(USER_OBJ_BINS_FILES)
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)fork_test $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/fork_test.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)fork_tree $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/fork_tree.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)bad_brk_test $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/bad_brk_test.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)bad_arg $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/bad_arg.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)sleep $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/sleep.o
 
 # $(OBJ_DIR)/lib/%.o:
 

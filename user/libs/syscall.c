@@ -49,6 +49,14 @@ int sys_kill(int pid) {
     return syscall(SYS_kill, pid);
 }
 
+int sys_sleep(unsigned int time) {
+    return syscall(SYS_sleep, time);
+}
+
+size_t sys_gettime(void) {
+    return syscall(SYS_gettime);
+}
+
 int sys_getpid(void) {
     return syscall(SYS_getpid);
 }

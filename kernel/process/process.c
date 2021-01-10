@@ -745,6 +745,26 @@ out:
     return 0;
 }
 
+int do_sleep(unsigned int time) {
+    if (time == 0) {
+        return 0;
+    }
+    bool flag;
+    Timer __timer;
+    Timer *timer = NULL;
+    local_intr_save(flag);
+    {
+        timer = timer_init(&__timer, current, time); 
+        current->state = STATE_SLEEPING;
+        current->wait_state = WT_TIMER;
+        add_timer(timer);
+    }
+    local_intr_restore(flag);
+    schedule();
+
+    del_timer(timer);
+}
+
 // exec系统调用接口
 static int kernel_execve(const char *name, unsigned char *binary, size_t size) {
     int len = strlen(name);
@@ -787,7 +807,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(bad_brk_test);
+    KERNEL_EXECVE(sleep);
 #endif
     panic("user_main execve failed.\n");
 }

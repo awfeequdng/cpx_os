@@ -28,8 +28,8 @@ void clock_init(void) {
     // set 8253 timer-chip
     // 设置定时时间为10ms
     outb(TIMER_MODE, TIMER_SEL0 | TIMER_RATEGEN | TIMER_16BIT);
-    outb(IO_TIMER1, TIMER_DIV(100) % 256);
-    outb(IO_TIMER1, TIMER_DIV(100) / 256);
+    outb(IO_TIMER1, TIMER_DIV(1000) % 256);
+    outb(IO_TIMER1, TIMER_DIV(1000) / 256);
 
     // initialize time counter 'ticks' to zero
     ticks = 0;

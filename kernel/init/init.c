@@ -13,6 +13,7 @@
 #include <ide.h>
 #include <swap.h>
 #include <process.h>
+#include <schedule.h>
 
 void printk_test(void)
 {
@@ -80,18 +81,16 @@ void start_kernel(void)
 	idt_init();
 
 	vmm_init();
+	schedule_init();
 	process_init();
 
 	ide_init();
 	swap_init();
 
-	// clock_init();
-
+	clock_init();
 	// 开启总中断
 	intr_enable();
-
-	// panic("before monitor\n");
-
+	
 	// while(1)
 	// 	monitor(NULL);
 	cpu_idle();

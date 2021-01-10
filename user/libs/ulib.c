@@ -4,7 +4,6 @@
 #include <types.h>
 
 void exit(int error_code) {
-    printf("exit, pid=%d\n", getpid());
     sys_exit(error_code);
     printf("BUG: exit failed.\n");
     while (1);
@@ -28,6 +27,14 @@ void yield(void) {
 
 int kill(int pid) {
     return sys_kill(pid);
+}
+
+int sleep(unsigned int time) {
+    return sys_sleep(time);
+}
+
+unsigned int gettime_msec(void) {
+    return sys_gettime();
 }
 
 int getpid(void) {
