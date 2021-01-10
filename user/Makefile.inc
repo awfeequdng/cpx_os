@@ -12,10 +12,15 @@ USER_SRC_FILES := user/libs/init_code.S \
         user/libs/stdio.c \
         user/libs/syscall.c \
         user/libs/ulib.c \
-        user/libs/umain.c
+        user/libs/umain.c \
+		user/libs/panic.c
 
-USER_BINS_SRC_FILES := user/hello.c \
-        user/yield.c
+USER_BINS_SRC_FILES := \
+		user/exit.c \
+		user/test_bss.c \
+		user/hello.c \
+        user/yield.c 
+		
 
 USER_LIB_SRC_FILES = lib/string.c \
 		lib/printfmt.c \
@@ -40,11 +45,16 @@ USER_LIB_OBJ_FILES := $(patsubst %.c, $(OBJ_DIR)/%.o, $(USER_LIB_SRC_FILES))
 USER_CFLAGS += $(addprefix -I,$(USER_INC))
 USER_CFLAGS += $(CFLAGS)
 
+$(USER_OBJ_BINS_FILES): $(USER_BINS_SRC_FILES)
+	$(V)$(CC) -nostdinc $(USER_CFLAGS) -c -o $@ $<
+
 $(USER_BINS): $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(USER_OBJ_BINS_FILES)
 	@echo + ld $@
 	@echo +++++++++ user bins: $(USER_BINS)
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)hello $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/hello.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)yield $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/yield.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)test_bss $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/test_bss.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)exit $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/exit.o
 
 # $(OBJ_DIR)/lib/%.o:
 

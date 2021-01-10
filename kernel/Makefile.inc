@@ -72,11 +72,11 @@ $(OBJ_DIR)/vector.o: $(TOOLS_DIR)/vector.c
 	$(OBJ_DIR)/vector >> $(OBJ_DIR)/vector.S
 	$(V)$(CC) -nostdinc $(KERNEL_CFLAGS) -c -o $@ $(OBJ_DIR)/vector.S 
 	
-	
+USER_BINS_BINARY := $(addprefix -b binary , $(USER_BINS))
 
 $(OBJ_DIR)/kernel/kernel: $(KERNEL_OBJ_FILES) $(KERNEL_LIB_OBJ_FILES) $(OBJ_DIR)/vector.o
 	@echo + ld $@
-	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $^ -b binary $(USER_BINS)
+	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $^ $(USER_BINS_BINARY)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
 

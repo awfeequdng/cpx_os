@@ -32,6 +32,11 @@ void kernel_thread_entry(void);
 void forkrets(struct TrapFrame *tf);
 void switch_to(Context *from, Context *to);
 
+
+static void put_page_dir(MmStruct *mm) {
+    free_page(kva2page(mm->page_dir));
+}
+
 static Process *alloc_process(void) {
     Process *process = kmalloc(sizeof(Process));
     if (process != NULL) {
@@ -47,6 +52,10 @@ static Process *alloc_process(void) {
         process->page_dir = get_boot_page_dir();
         process->flags = 0;
         memset(process->name, 0, PROCESS_NAME_LEN);
+        process->wait_state = 0;
+        process->child = NULL;
+        process->left_sibling = NULL;
+        process->right_sibling = NULL;
     }
     return process;
 }
@@ -133,6 +142,11 @@ static void forkret(void) {
 // 将进程添加到hash list
 static void hash_process(Process *process) {
     list_add(hash_list + pid_hashfn(process->pid), &(process->hash_link));
+}
+
+static void unhash_process(Process *process) {
+    // 从hash表上将process摘下来
+    list_del(&(process->hash_link));
 }
 
 Process *find_process(int pid) {
@@ -223,9 +237,10 @@ good_mm:
     process->page_dir = mm->page_dir;
     return 0;
 bad_dup_cleanup_mmap:
-
+    exit_mmap(mm);
+    put_page_dir(mm);
 bad_page_dir_cleanup_mm:
-
+    mm_destory(mm);
 bad_mm:
     return ret;
 }
@@ -233,12 +248,42 @@ bad_mm:
 static void copy_thread(Process *process, uintptr_t esp, struct TrapFrame *tf) {
     process->tf = (struct TrapFrame *)(process->kstack + K_STACK_SIZE) - 1;
     *(process->tf) = *tf;
+    // fork子进程的返回值为0
     process->tf->tf_regs.reg_eax = 0;
+    // 父进程和子进程在刚fork时的栈结构是一样的
     process->tf->tf_esp = esp;
     process->tf->tf_eflags |= FL_IF;
 
     process->context.eip = (uintptr_t)forkret;
     process->context.esp = (uintptr_t)(process->tf);
+}
+
+
+static void set_links(Process *process) {
+    list_add(&process_list, &(process->process_link));
+    process->left_sibling = NULL;
+    if ((process->right_sibling = process->parent->child) != NULL) {
+        process->right_sibling->left_sibling = process;
+    }
+    process->parent->child = process;
+    nr_process++;
+}
+
+// 将process的父子关系、兄弟关系的链表删除掉
+static void remove_links(Process *process) {
+    list_del(&(process->process_link));
+    // process的右孩子的左节点指向process的左孩子
+    if (process->right_sibling != NULL) {
+        process->right_sibling->left_sibling = process->left_sibling;
+    }
+    // 如果process存在左节点，则将左节点的右节点指向process的右节点
+    if (process->left_sibling != NULL) {
+        process->left_sibling->right_sibling = process->right_sibling;
+    } else {
+        // 如果process不存在左节点，则process的父节点的孩子就是process，将process父节点的孩子指向process的右节点
+        process->parent->child = process->right_sibling;
+    }
+    nr_process--;
 }
 
 int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
@@ -255,6 +300,7 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
     }
 
     process->parent = current;
+    assert(current->wait_state == 0);
 
     if (setup_kstack(process) != 0) {
         goto bad_fork_cleanup_process;
@@ -269,8 +315,9 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
     {
         process->pid = get_pid();
         hash_process(process);
-        list_add(&process_list, &(process->process_link));
-        nr_process++;
+        // list_add(&process_list, &(process->process_link));
+        // nr_process++;
+        set_links(process);
     }
     local_intr_restore(flag);
 
@@ -297,11 +344,51 @@ int do_exit(int error_code) {
         panic("init_process exit. pid = %d, error_code = %d\n", current->pid, error_code);
     }
 
-    panic("process exit, pid = %d, error_code = %d\n", current->pid, error_code);
-}
+    MmStruct *mm = current->mm;
+    if (mm != NULL) {
+        lcr3(PADDR(get_boot_page_dir()));
+        if (mm_count_dec(mm) == 0) {
+            // 删除页表和已经映射的page
+            exit_mmap(mm);
+            put_page_dir(mm);
+            mm_destory(mm);
+        }
+        current->mm = NULL;
+    }
+    current->state = STATE_ZOMBIE;
+    current->exit_code = error_code;
 
-static void put_page_dir(MmStruct *mm) {
-    free_page(kva2page(mm->page_dir));
+    bool flag;
+    Process *process = NULL;
+    local_intr_save(flag);
+    {
+        process = current->parent;
+        if (process->wait_state == WT_CHILD) {
+            // 父进程在等待子进程结束, 唤醒父进程
+            wakeup_process(process);
+        }
+        // 将current的孩子挂接到init_process节点下（为init_process的孩子）
+        while (current->child != NULL) {
+            process = current->child;
+            current->child = process->right_sibling;
+            process->left_sibling = NULL;
+            if ((process->right_sibling = init_process->child) != NULL) {
+                init_process->child->left_sibling = process;
+            }
+            process->parent = init_process;
+            init_process->child = process;
+            if (process->state == STATE_ZOMBIE) {
+                // process已经结束，并且init_process在等待子进程结束
+                if (init_process->wait_state == WT_CHILD) {
+                    wakeup_process(init_process);
+                }
+            }
+        }
+    }
+    local_intr_restore(flag);
+
+    schedule();
+    panic("do_exit will not return!! %d.\n", current->pid);
 }
 
 // load_icode -  called by sys_exec-->do_execve
@@ -510,6 +597,91 @@ int do_yield(void) {
     return 0;
 }
 
+int do_wait(int pid, int *code_store) {
+    MmStruct *mm = current->mm;
+    if (code_store != NULL) {
+        if (!user_mem_check(mm, (uintptr_t)code_store, sizeof(int), 1)) {
+            return -E_INVAL;
+        }
+    }
+
+    Process *process = NULL;
+    bool flag;
+    // 是否继续等待子进程结束
+    bool wait_again;
+repeat:
+    wait_again = false;
+    if (pid != 0) {
+        process = find_process(pid);
+        // 找到pid对应的子进程
+        if (process != NULL && process->parent == current) {
+            wait_again = true;
+            if (process->state == STATE_ZOMBIE) {
+                goto found;
+            }
+        }
+    } else {
+        process = current->child;
+        // 当前进程存在子进程
+        while (process != NULL) {
+            wait_again = true;
+            if (process->state == STATE_ZOMBIE) {
+                goto found;
+            }
+            process = process->right_sibling;
+        }
+    }
+    // 找到子进程，但是子进程还没有结束
+    // 在等待子进程结束的时候，如果当前进程current被杀死，则直接退出
+    if (wait_again) {
+        current->state = STATE_SLEEPING;
+        current->wait_state = WT_CHILD;
+        schedule();
+        if (current->flags & PF_EXITING) {
+            do_exit(-E_KILLED);
+        }
+        goto repeat;
+    }
+    // pid不等于0时，找不到对应pid对应的process；
+    // 或者pid为0时，当前进程不存在子进程
+    return -E_BAD_PROCESS;
+
+found:
+    if (process == idle_process || process == init_process) {
+        panic("wait idle_process or init_process.\n");
+    }
+    if (code_store != NULL) {
+        *code_store = process->exit_code;
+    }
+    local_intr_save(flag);
+    {
+        unhash_process(process);
+        remove_links(process);
+    }
+    local_intr_restore(flag);
+    // ZOMBIE状态的process堆栈是没有释放的，这个堆栈可以用来调试
+    put_kstack(process);
+    kfree(process);
+    return 0;
+}
+
+// 强制杀死process，设置process的flags为PF_EXITING
+int do_kill(int pid) {
+    Process *process = NULL;
+    if ((process = find_process(pid)) != NULL) {
+        if (!(process->flags & PF_EXITING)) {
+            process->flags |= PF_EXITING;
+            // process处于等待状态，这个状态可以被中断
+            if (process->wait_state & WT_INTERRUPTED) {
+                wakeup_process(process);
+            }
+            return 0;
+        }
+        return -E_KILLED;
+    }
+    return -E_INVAL;
+}
+
 // exec系统调用接口
 static int kernel_execve(const char *name, unsigned char *binary, size_t size) {
     int len = strlen(name);
@@ -547,16 +719,45 @@ static int kernel_execve(const char *name, unsigned char *binary, size_t size) {
 
 #define KERNEL_EXECVE2(x, xstart, xsize)    __KERNEL_EXECVE2(x, xstart, xsize)
 
-static int init_main(void *arg) {
-    printk("this init_process, pid = %d, name = \"%s\"\n", current->pid, get_process_name(current));
-    printk("To U: \"%s\".\n", (char *)arg);
-    printk("To U: \"en.., Bye, Bye. :)\"\n");
+// 内核线程：用于执行用户态程序
+static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(hello);
+    KERNEL_EXECVE(exit);
 #endif
-    panic("kernel_execve failed.\n");
+    panic("user_main execve failed.\n");
+}
+
+
+// init_process内核线程： 该线程用于创建kswap_main & user_main等内核线程
+static int init_main(void *arg) {
+    size_t nr_free_pages_store = nr_free_pages();
+    size_t slab_allocated_store = slab_allocated();
+
+    int pid = kernel_thread(user_main, NULL, 0);
+    if (pid <= 0) {
+        panic("create user_main failed.\n");
+    }
+
+    // 等待init_process所有的子进程结束
+    while (do_wait(0, NULL) == 0) {
+        schedule();
+    }
+
+    printk("all user-mode processes have quit.\n");
+    assert(init_process->child == NULL);
+    assert(init_process->left_sibling == NULL);
+    assert(init_process->right_sibling == NULL);
+    // 只有两个进程了，一个idle_process，另一个为init_process
+    assert(nr_process == 2);
+    // idle_process不挂在process_list，当前只有init_process挂载process_list上
+    assert(list_next(&process_list) == &(init_process->process_link));
+    assert(list_prev(&process_list) == &(init_process->process_link));
+    assert(nr_free_pages_store == nr_free_pages());
+    assert(slab_allocated_store == slab_allocated());
+
+    printk("init check memory pass.\n");
     return 0;
 }
 

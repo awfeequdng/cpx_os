@@ -274,7 +274,8 @@ int mm_map_shmem(MmStruct *mm, uintptr_t addr, uint32_t vm_flags,
 }
 
 // 检查用户空间的内存是否可写（write为true），或者可读（write为false）
-// todo: 有些没看懂
+// 当mm不为NULL时，检查mm的用户空间地址是否合法，此时addr必须时用户态的地址；
+// 当mm为NULL时，addr地址就是内核态的地址范围
 bool user_mem_check(MmStruct *mm, uintptr_t addr, size_t len, bool write) {
     if (mm != NULL) {
         if (!USER_ACCESS(addr, addr + len)) {
@@ -301,7 +302,7 @@ bool user_mem_check(MmStruct *mm, uintptr_t addr, size_t len, bool write) {
         }
         return true;
     }
-    // todo: 为什么内核空间地址也返回true?
+
     return KERNEL_ACCESS(addr, addr + len);
 }
 
@@ -795,13 +796,15 @@ failed:
 }
 
 void print_vma(void) {
-    // if (check_mm_struct == NULL || check_mm_struct->map_count == 0) {
-    //     return;
-    // }
+    MmStruct *mm = NULL;
     if (current == NULL || current->mm == NULL || current->mm->map_count == 0) {
-        return;
+        if (check_mm_struct == NULL || check_mm_struct->map_count == 0) {
+            return;
+        }
+        mm = check_mm_struct;
+    } else {
+        mm = current->mm;
     }
-    MmStruct *mm = current->mm;
     VmaStruct *vma = NULL;
     list_entry_t *head = &(mm->mmap_link);
     list_entry_t *entry = list_next(head);

@@ -16,12 +16,23 @@ static int sys_fork(uint32_t arg[]) {
     return do_fork(0, stack, tf);
 }
 
+static int sys_wait(uint32_t arg[]) {
+    int32_t pid = (int32_t)arg[0];
+    int32_t *store = (int32_t *)arg[1];
+    return do_wait(pid, store);
+}
+
 static int sys_exec(uint32_t arg[]) {
     const char *name = (const char *)arg[0];
     size_t len = (size_t)arg[1];
     unsigned char *binary = (unsigned char *)arg[2];
     size_t size = (size_t)arg[3];
     return do_execve(name, len, binary, size);
+}
+
+static int sys_kill(uint32_t arg[]) {
+    int32_t pid = (int32_t)arg[0];
+    return do_kill(pid);
 }
 
 static int sys_yield(uint32_t arg[]) {
@@ -46,8 +57,10 @@ static int sys_page_dir(uint32_t arg[]) {
 static int (*syscalls[])(uint32_t arg[]) = {
     [SYS_exit] = sys_exit,
     [SYS_fork] = sys_fork,
+    [SYS_wait] = sys_wait,
     [SYS_exec] = sys_exec,
     [SYS_yield] = sys_yield,
+    [SYS_kill] = sys_kill,
     [SYS_getpid] = sys_getpid,
     [SYS_putc] = sys_putc,
     [SYS_pgdir] = sys_page_dir,

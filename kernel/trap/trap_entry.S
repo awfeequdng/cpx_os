@@ -37,5 +37,6 @@ __trap_ret:
 
 	.global forkrets
 forkrets:
+	# 让esp指向tf的起始地址
 	movl 4(%esp), %esp
 	jmp __trap_ret

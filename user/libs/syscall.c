@@ -37,8 +37,16 @@ int sys_fork(void) {
     return syscall(SYS_fork);
 }
 
+int sys_wait(int pid, int *store) {
+    return syscall(SYS_wait, pid, store);
+}
+
 int sys_yield(void) {
     return syscall(SYS_yield);
+}
+
+int sys_kill(int pid) {
+    return syscall(SYS_kill, pid);
 }
 
 int sys_getpid(void) {

@@ -1,10 +1,22 @@
 #include <list.h>
 #include <sync.h>
 #include <schedule.h>
+#include <assert.h>
 
 void wakeup_process(Process *process) {
-    assert(process->state != STATE_ZOMBIE && process->state != STATE_RUNNABLE);
-    process->state = STATE_RUNNABLE;
+    assert(process->state != STATE_ZOMBIE);
+    bool flag;
+    local_intr_save(flag);
+    {
+        if (process->state != STATE_RUNNABLE) {
+            process->state = STATE_RUNNABLE;
+            process->wait_state = 0;
+        } else {
+            warn("wakeup runnable process.\n");
+        }
+    }
+    local_intr_restore(flag);
+
 }
 
 void schedule(void) {

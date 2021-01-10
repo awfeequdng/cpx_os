@@ -55,7 +55,16 @@ typedef struct process_struct {
     char name[PROCESS_NAME_LEN + 1];
     list_entry_t process_link;      // 进程双向链表，所有进程挂载在process_list链表下
     list_entry_t hash_link;         // 进程的hash list
+    int exit_code;
+    uint32_t wait_state;
+    // child为孩子节点，left_sibling为左边的兄弟，right_sibling为右边的兄弟
+    struct process_struct *child, *left_sibling, *right_sibling;
 } Process;
+
+#define PF_EXITING                  0x00000001  // getting shutdown
+
+#define WT_CHILD                    (0x00000001 | WT_INTERRUPTED)
+#define WT_INTERRUPTED               0x80000000
 
 #define le2process(le, member)      \
     container_of((le), Process, member)
@@ -80,5 +89,8 @@ int do_fork(uint32_t clone_flags, uintptr_t statck, struct TrapFrame *tf);
 int do_exit(int error_code);
 int do_execve(const char *name, size_t len, unsigned char *binary, size_t size);
 int do_yield(void);
+int do_wait(int pid, int *code_store);
+int do_kill(int pid);
+
 
 #endif // __KERNEL_PROCESS_PROCESS_H__

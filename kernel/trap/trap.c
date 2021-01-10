@@ -230,6 +230,11 @@ void trap(struct TrapFrame *tf)
 
 		current->tf = otf;
 		if (!in_kernel) {
+			// 用户态发生了中断事件
+			if (current->flags & PF_EXITING) {
+				// 进程收到kill信号
+				do_exit(-E_KILLED);
+			}
 			if (current->need_resched) {
 				// 中断结束前进行一次调度
 				schedule();
