@@ -46,7 +46,12 @@ typedef struct mm_struct {
     lock_t mm_lock;
     uintptr_t brk_start;
     uintptr_t brk;
+    // 进程挂接在kswapd管理的链表上
+    ListEntry process_mm_link;
 } MmStruct;
+
+#define le2mm(le, member)   \
+    container_of(le, MmStruct, member)
 
 // 當節點數量大於32時，採用紅黑樹將vma鏈接起來
 #define RB_MIN_MAP_COUNT 32

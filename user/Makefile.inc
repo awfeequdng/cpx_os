@@ -17,6 +17,7 @@ USER_SRC_FILES := user/libs/init_code.S \
 		user/libs/malloc.c
 
 USER_BINS_SRC_FILES := \
+		user/swap_test.c \
 		user/cow_test.c \
 		user/sleep.c \
 		user/bad_arg.c \
@@ -68,6 +69,7 @@ $(USER_BINS): $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(USER_OBJ_BINS_FILES)
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)bad_arg $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/bad_arg.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)sleep $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/sleep.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)cow_test $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/cow_test.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)swap_test $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/swap_test.o
 
 # $(OBJ_DIR)/lib/%.o:
 

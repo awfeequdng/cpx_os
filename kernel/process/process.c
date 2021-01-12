@@ -12,8 +12,10 @@
 #include <schedule.h>
 #include <elf.h>
 
+// 除了idle_process，其他所有进程都挂接在该链表下面
 ListEntry process_list;
-
+// 需要通过kswapd管理内存的进程（页可以被置换出去的进程）挂接在该链表下
+ListEntry process_mm_list;
 #define HASH_SHIFT          10
 #define HASH_LIST_SIZE      (1 << HASH_SHIFT)
 #define pid_hashfn(x)       (hash32(x, HASH_SHIFT))
@@ -25,6 +27,8 @@ Process *idle_process = NULL;
 Process *init_process = NULL;
 
 Process *current = NULL;
+
+Process *kswapd = NULL;
 
 static int nr_process = 0;
 
@@ -235,6 +239,13 @@ good_mm:
     if (mm != old_mm) {
         mm->brk_start = old_mm->brk_start;
         mm->brk = old_mm->brk;
+        // 进程创建了MmStruct结构用于管理内存，那么将这个进程挂接到process_mm_list下面进行页内存管理
+        bool flag;
+        local_intr_save(flag);
+        {
+            list_add(&process_mm_list, &(mm->process_mm_link));
+        }
+        local_intr_restore(flag);
     }
     mm_count_inc(mm);
     process->mm = mm;
@@ -355,6 +366,12 @@ int do_exit(int error_code) {
             // 删除页表和已经映射的page
             exit_mmap(mm);
             put_page_dir(mm);
+            bool flag;
+            local_intr_save(flag);
+            {
+                list_del(&(mm->process_mm_link));
+            }
+            local_intr_restore(flag);
             mm_destory(mm);
         }
         current->mm = NULL;
@@ -530,6 +547,12 @@ static int load_icode(unsigned char *binary, size_t size) {
     if ((ret = mm_map(mm, USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, vm_flags, NULL)) != 0) {
         goto bad_cleanup_mmap;
     }
+    bool intr_flag;
+    local_intr_save(intr_flag);
+    {
+        list_add(&process_mm_list, &(mm->process_mm_link));
+    }
+    local_intr_restore(intr_flag);
 
     mm_count_inc(mm);
     current->mm = mm;
@@ -582,6 +605,12 @@ int do_execve(const char *name, size_t len, unsigned char *binary, size_t size) 
             exit_mmap(mm);
             // 将页目录也是释放掉
             put_page_dir(mm);
+            bool intr_flag;
+            local_intr_save(intr_flag);
+            {
+                list_del(&(mm->process_mm_link));
+            }
+            local_intr_restore(intr_flag);
             // 释放所有vma结构以及mm结构
             mm_destory(mm);
         }
@@ -807,7 +836,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(cow_test);
+    KERNEL_EXECVE(swap_test);
 #endif
     panic("user_main execve failed.\n");
 }
@@ -815,28 +844,50 @@ static int user_main(void *arg) {
 
 // init_process内核线程： 该线程用于创建kswap_main & user_main等内核线程
 static int init_main(void *arg) {
+    int pid;
+    if ((pid = kernel_thread(kswapd_main, NULL, 0)) <= 0) {
+        panic("kswapd init failed.\n");
+    }
+    kswapd = find_process(pid);
+    set_process_name(kswapd, "kswapd");
+
     size_t nr_free_pages_store = nr_free_pages();
     size_t slab_allocated_store = slab_allocated();
+    unsigned int nr_process_store = nr_process;
 
-    int pid = kernel_thread(user_main, NULL, 0);
+    pid = kernel_thread(user_main, NULL, 0);
     if (pid <= 0) {
         panic("create user_main failed.\n");
     }
 
     // 等待init_process所有的子进程结束
     while (do_wait(0, NULL) == 0) {
+        if (nr_process_store == nr_process) {
+            // 除了kswapd 和 idle_process以及 init_process没有结束外，其他所有进程都结束了
+            assert(nr_process == 3);
+            break;
+        }
+        schedule();
+    }
+
+    assert(kswapd != NULL);
+    int i;
+    for (i = 0; i < 10; i++) {
+        if (kswapd->wait_state == WT_TIMER) {
+            wakeup_process(kswapd);
+        }
         schedule();
     }
 
     printk("all user-mode processes have quit.\n");
-    assert(init_process->child == NULL);
+    assert(init_process->child == kswapd);
     assert(init_process->left_sibling == NULL);
     assert(init_process->right_sibling == NULL);
     // 只有两个进程了，一个idle_process，另一个为init_process
-    assert(nr_process == 2);
-    // idle_process不挂在process_list，当前只有init_process挂载process_list上
-    assert(list_next(&process_list) == &(init_process->process_link));
-    assert(list_prev(&process_list) == &(init_process->process_link));
+    assert(nr_process == 3);
+    assert(kswapd->child == NULL);
+    assert(kswapd->left_sibling == NULL);
+    assert(kswapd->right_sibling == NULL);
     assert(nr_free_pages_store == nr_free_pages());
     assert(slab_allocated_store == slab_allocated());
 
@@ -847,6 +898,7 @@ static int init_main(void *arg) {
 void process_init(void) {
     int i;
     list_init(&process_list);
+    list_init(&process_mm_list);
     for (i = 0; i < HASH_LIST_SIZE; i++) {
         list_init(hash_list + i);
     }

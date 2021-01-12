@@ -14,13 +14,10 @@
 #include <error.h>
 #include <schedule.h>
 
-// 100个tick就是1s
-// #define TICK_HZ		100
-
-#define TICK_HZ		30
+#define TICK		30
 
 static void print_hz() {
-	printk("%d ticks is 1 second\n", TICK_HZ);
+	
 }
 
 static struct GateDescriptor idt[256] = {{0}};
@@ -186,7 +183,7 @@ static void trap_dispatch(struct TrapFrame *tf) {
 			tick++;
 			set_ticks(tick);
 			run_timer_list();
-			if (tick % TICK_HZ == 0) {
+			if (tick % TICK == 0) {
 				// print_hz();
 				// printk("%d ticks\n", tick);
 				assert(current != NULL);

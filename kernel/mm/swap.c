@@ -11,6 +11,9 @@
 #include <shmem.h>
 #include <stdio.h>
 #include <vmm.h>
+#include <process.h>
+#include <wait.h>
+#include <sync.h>
 
 size_t max_swap_offset;
 
@@ -39,7 +42,7 @@ static unsigned short *mem_map;
 #define SWAP_UNUSED         0XFFFF
 #define MAX_SWAP_REF        0XFFFE
 
-static volatile bool swap_init_ok = 0;
+static volatile bool swap_init_ok = false;
 
 #define HASH_SHIFT          10
 #define HASH_LIST_SIZE      (1 << HASH_SHIFT)
@@ -48,6 +51,9 @@ static volatile bool swap_init_ok = 0;
 static ListEntry hash_list[HASH_LIST_SIZE];
 
 static lock_t swap_in_lock;
+
+static volatile int pressure = 0;
+static WaitQueue kswapd_done;
 
 static void swap_list_init(swap_list_t *list) {
     list_init(&(list->swap_link));
@@ -106,13 +112,58 @@ void swap_init(void) {
     check_swap();
     check_mm_swap();
     check_mm_shmem_swap();
+
+    wait_queue_init(&kswapd_done);
+    swap_init_ok = true;
 }
 
 bool try_free_pages(size_t n) {
-    if (!swap_init_ok) {
-        return 0;
+    if (!swap_init_ok || kswapd == NULL) {
+        return false;
     }
-    panic("not implemented yet.!\n");
+    printk("try free pages: n = %d\n", n);
+
+    if (current == kswapd) {
+        panic("kswapd call try_free_pages!.\n");
+    }
+    if (n >= (1 << 7)) {
+        // todo: 为什么释放大于128个page就失败呢？
+        return false;
+    }
+
+    pressure += n;
+    printk("pressure = %d\n", pressure);
+    
+    Wait __wait, *wait = &__wait;
+
+    bool flag;
+    local_intr_save(flag);
+    {
+        wait_init(wait, current);
+        current->state = STATE_SLEEPING;
+        // swapd的等待状态不可中断
+        current->wait_state = WT_KSWAPD;
+        wait_queue_add(&kswapd_done, wait);
+        if (kswapd->wait_state == WT_TIMER) {
+            // 如果kswapd处于定时器随眠状态，则直接唤醒kswapd
+            wakeup_process(kswapd);
+        }
+    }
+    local_intr_restore(flag);
+
+    schedule();
+    // 当前wait已经从wait_queue中移除了，并且唤醒wait的是kswapd进程
+    assert(!wait_in_queue(wait) && wait->wakeup_flags == WT_KSWAPD);
+    return true;
+}
+
+static void kswapd_wakeup_all(void) {
+    bool flag;
+    local_intr_save(flag);
+    {
+        wakeup_queue(&kswapd_done, WT_KSWAPD, true);
+    }
+    local_intr_restore(flag);
 }
 
 static swap_entry_t try_alloc_swap_entry(void);
@@ -601,6 +652,40 @@ static int swap_out_mm(MmStruct *mm, size_t require) {
     }
 
     return free_count;
+}
+
+int kswapd_main(void *arg) {
+    int guard = 0;
+    while (1) {
+        if (pressure > 0) {
+            // todo: 为什么needs的值是（pressure << 5）
+            int needs = (pressure << 5), rounds = 16;
+            ListEntry *head = &process_mm_list;
+            assert(!list_empty(head));
+            while (needs > 0 && rounds-- > 0) {
+                ListEntry *entry = list_next(head);
+                list_del(entry);
+                list_add_before(head, entry);
+                MmStruct *mm = le2mm(entry, process_mm_link);
+                // todo: 为什么每次驱逐的page数是32个页
+                needs -= swap_out_mm(mm, (needs < 32) ? needs : 32);
+            }
+        }
+        pressure -= page_launder();
+        refill_inactive_scan();
+        if (pressure > 0) {
+            if ((++guard) >= 1000) {
+                // 经过了1000次的循环还是没有释放处pressure个page，说明此时可能内存不足了
+                guard = 0;
+                warn("kswapd: may out of memory");
+            }
+            continue;
+        }
+        pressure = 0;
+        guard = 0;
+        kswapd_wakeup_all();
+        do_sleep(1000);
+    }
 }
 
 void check_swap(void) {

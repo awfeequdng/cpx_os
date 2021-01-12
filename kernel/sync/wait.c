@@ -1,6 +1,8 @@
 #include <wait.h>
 #include <sync.h>
 #include <process.h>
+#include <schedule.h>
+
 #include <types.h>
 
 void wait_init(Wait *wait, Process *process) {

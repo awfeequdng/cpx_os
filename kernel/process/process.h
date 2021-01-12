@@ -8,6 +8,8 @@
 #include <vmm.h>
 #include <trap.h>
 
+#include <swap.h>
+
 enum ProcessState {
     STATE_UNINIT = 0,
     STATE_SLEEPING,
@@ -37,6 +39,7 @@ typedef struct context_struct {
 
 // ListEntry *get_process_list(void);
 extern ListEntry process_list;
+extern ListEntry process_mm_list;
 
 struct mm_struct;
 
@@ -63,8 +66,10 @@ typedef struct process_struct {
 
 #define PF_EXITING                  0x00000001  // getting shutdown
 
-#define WT_CHILD                    (0x00000001 | WT_INTERRUPTED)
-#define WT_TIMER                    (0x00000002 | WT_INTERRUPTED)
+#define WT_CHILD                    (0x00000001 | WT_INTERRUPTED)   // wait child
+#define WT_TIMER                    (0x00000002 | WT_INTERRUPTED)   // wait timer
+#define WT_KSWAPD                    0x00000004                     // wait kswapd to free page
+
 #define WT_INTERRUPTED               0x80000000
 
 #define le2process(le, member)      \
@@ -73,6 +78,7 @@ typedef struct process_struct {
 extern Process *idle_process;
 extern Process *init_process;
 extern Process *current;
+extern Process *kswapd;
 // Process *get_idle_process(void);
 // Process *get_init_process(void);
 // Process *get_current_process(void);
