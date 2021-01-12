@@ -2,6 +2,17 @@
 #include <syscall.h>
 #include <stdio.h>
 #include <types.h>
+#include <lock.h>
+
+static lock_t fork_lock = INIT_LOCK;
+
+void lock_fork(void) {
+    lock(&fork_lock);
+}
+
+void unlock_fork(void) {
+    unlock(&fork_lock);
+}
 
 void exit(int error_code) {
     sys_exit(error_code);
@@ -10,7 +21,12 @@ void exit(int error_code) {
 }
 
 int fork(void) {
-    return sys_fork();
+    // 后面需要支持多线程了，在进行fork时需要先加锁
+    int ret;
+    lock_fork();
+    ret = sys_fork();
+    unlock_fork();
+    return ret;
 }
 
 int wait(void) {

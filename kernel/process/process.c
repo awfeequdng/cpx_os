@@ -836,7 +836,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(mmap_test);
+    KERNEL_EXECVE(shmem_test);
 #endif
     panic("user_main execve failed.\n");
 }
