@@ -836,7 +836,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(swap_test);
+    KERNEL_EXECVE(mmap_test);
 #endif
     panic("user_main execve failed.\n");
 }
@@ -928,6 +928,114 @@ void process_init(void) {
 
     assert(idle_process != NULL && idle_process->pid == 0);
     assert(init_process != NULL && init_process->pid == 1);
+}
+
+int do_mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
+    MmStruct *mm = current->mm;
+    if (mm == NULL) {
+        panic("kernel thread call do_mmap!\n");
+    }
+    if (addr_store == NULL || len == 0) {
+        return -E_INVAL;
+    }
+
+    int ret = -E_INVAL;
+
+    uintptr_t addr;
+
+    lock_mm(mm);
+    if (!copy_from_user(mm, &addr, addr_store, sizeof(uintptr_t), true)) {
+        goto out_unlock;
+    }
+    
+    uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
+    uintptr_t end = ROUNDUP(addr + len, PAGE_SIZE);
+    addr = start;
+    len = end - start;
+
+    uint32_t vm_flags = VM_READ;
+    if (mmap_flags & MMAP_WRITE) vm_flags |= VM_WRITE;
+    if (mmap_flags & MMAP_STACK) vm_flags |= VM_STACK;
+
+    ret = -E_NO_MEM;
+    if (addr == 0) {
+        if ((addr = get_unmapped_area(mm, len)) == 0) {
+            goto out_unlock;
+        }
+    }
+    if ((ret = mm_map(mm, addr, len, vm_flags, NULL)) == 0) {
+        *addr_store = addr;
+    }
+out_unlock:
+    unlock_mm(mm);
+    return ret;
+}
+
+int do_munmap(uintptr_t addr, size_t len) {
+    MmStruct *mm = current->mm;
+    if (mm == NULL) {
+        panic("kernel thread call do_munmap!.\n");
+    }
+    if (len == 0) {
+        return -E_INVAL;
+    }
+    int ret;
+    lock_mm(mm);
+    {
+        ret = mm_unmap(mm, addr, len);
+    }
+    unlock_mm(mm);
+    return ret;
+}
+
+// 创建共享内存
+int do_shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
+    MmStruct *mm = current->mm;
+    if (mm == NULL) {
+        panic("kernel thread call do_shmem.\n");
+    }
+    if (addr_store == NULL || len == 0) {
+        return -E_INVAL;
+    }
+
+    int ret = -E_INVAL;
+
+    uintptr_t addr;
+
+    lock_mm(mm);
+    if (!copy_from_user(mm, &addr, addr_store, sizeof(uintptr_t), true)) {
+        goto out_unlock;
+    }
+
+    uintptr_t start = ROUNDDOWN(addr, PAGE_SIZE);
+    uintptr_t end = ROUNDUP(addr + len, PAGE_SIZE);
+    addr = start;
+    len = end - start;
+    uint32_t vm_flags = VM_READ;
+    if (mmap_flags & MMAP_WRITE) vm_flags |= VM_WRITE;
+    if (mmap_flags & MMAP_STACK) vm_flags |= VM_STACK;
+
+    ret = -E_NO_MEM;
+    if (addr == 0) {
+        if ((addr = get_unmapped_area(mm, len)) == 0) {
+            goto out_unlock;
+        }
+    }
+    ShareMemory *shmem = NULL;
+    if ((shmem = shmem_create(len)) == NULL) {
+        goto out_unlock;
+    }
+
+    if ((ret = mm_map_shmem(mm, addr, vm_flags, shmem, NULL)) != 0) {
+        assert(shmem_ref(shmem) == 0);
+        shmem_destory(shmem);
+        goto out_unlock;
+    }
+
+    *addr_store = addr;
+out_unlock:
+    unlock_mm(mm);
+    return ret;
 }
 
 void cpu_idle(void) {

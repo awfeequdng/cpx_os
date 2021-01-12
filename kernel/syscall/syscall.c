@@ -68,6 +68,26 @@ static uint32_t sys_page_dir(uint32_t arg[]) {
     return 0;
 }
 
+static uint32_t sys_mmap(uint32_t arg[]) {
+    uintptr_t *addr_store = (uintptr_t *)arg[0];
+    size_t len = (size_t)arg[1];
+    uint32_t mmap_flags = (uint32_t)arg[2];
+    return do_mmap(addr_store, len, mmap_flags);
+}
+
+static uint32_t sys_munmap(uint32_t arg[]) {
+    uintptr_t addr = (uintptr_t)arg[0];
+    size_t len = (size_t)arg[1];
+    return do_munmap(addr, len);
+}
+
+static uint32_t sys_shmem(uint32_t arg[]) {
+    uintptr_t *addr_store = (uintptr_t *)arg[0];
+    size_t len = (size_t)arg[1];
+    uint32_t mmap_flags = (uint32_t)arg[2];
+    return do_shmem(addr_store, len, mmap_flags);
+}
+
 static uint32_t (*syscalls[])(uint32_t arg[]) = {
     [SYS_exit] = sys_exit,
     [SYS_fork] = sys_fork,
@@ -81,6 +101,9 @@ static uint32_t (*syscalls[])(uint32_t arg[]) = {
     [SYS_gettime] = sys_gettime,
     [SYS_putc] = sys_putc,
     [SYS_pgdir] = sys_page_dir,
+    [SYS_mmap] = sys_mmap,
+    [SYS_munmap] = sys_munmap,
+    [SYS_shmem] = sys_shmem,
 };
 
 #define NUM_SYSCALLS        ((sizeof(syscalls)) / (sizeof(syscalls[0])))

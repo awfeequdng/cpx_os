@@ -44,6 +44,7 @@ typedef struct mm_struct {
     uintptr_t swap_address;
     atomic_t mm_count;
     lock_t mm_lock;
+    int locked_by;      // mm是被哪个进程锁住的
     uintptr_t brk_start;
     uintptr_t brk;
     // 进程挂接在kswapd管理的链表上
@@ -80,6 +81,8 @@ int do_page_fault(MmStruct *m, uint32_t error_code, uintptr_t addr);
 
 bool user_mem_check(MmStruct *mm, uintptr_t start, size_t len, bool write);
 
+uintptr_t get_unmapped_area(MmStruct *mm, size_t len);
+
 static inline int mm_count(MmStruct *mm) {
     return atomic_read(&(mm->mm_count));
 }
@@ -96,17 +99,12 @@ static inline int mm_count_dec(MmStruct *mm) {
     return atomic_sub_return(&(mm->mm_count), 1);
 }
 
-static inline void lock_mm(MmStruct *mm) {
-    if (mm != NULL) {
-        lock(&(mm->mm_lock));
-    } 
-}
+void lock_mm(MmStruct *mm);
+void unlock_mm(MmStruct *mm);
+bool try_lock_mm(MmStruct *mm);
 
-static inline void unlock_mm(MmStruct *mm) {
-    if (mm != NULL) {
-        unlock(&(mm->mm_lock));
-    }
-}
+bool copy_from_user(MmStruct *mm, void *dst, const void *src, size_t len, bool writable);
+bool copy_to_user(MmStruct *mm, void *dst, const void *src, size_t len);
 
 void print_vma(void);
 

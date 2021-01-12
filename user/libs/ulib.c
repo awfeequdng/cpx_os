@@ -44,3 +44,15 @@ int getpid(void) {
 void print_page_dir(void) {
     sys_page_dir();
 }
+
+int mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
+    return sys_mmap(addr_store, len, mmap_flags);
+}
+
+int munmap(uintptr_t addr, size_t len) {
+    return sys_munmap(addr, len);
+}
+
+int shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
+    return sys_shmem(addr_store, len, mmap_flags);
+}

@@ -360,6 +360,33 @@ static void vma_resize(VmaStruct *vma, uintptr_t start, uintptr_t end) {
     vma->vm_end = end;
 }
 
+uintptr_t get_unmapped_area(MmStruct *mm, size_t len) {
+    if (len == 0 || len > USER_TOP) {
+        return 0;
+    }
+    uintptr_t start = USER_TOP - len;
+    ListEntry *head = &(mm->mmap_link);
+    ListEntry *entry = head;
+    // 从最后一个vma开始查找，即从最高地址开始查找
+    while ((entry = list_prev(entry)) != head) {
+        VmaStruct *vma = le2vma(entry, vma_link);
+        if (start >= vma->vm_end) {
+            return start;
+        }
+        // start < vma->vm_end，
+        // 如果此时start + len > vma->vm_start
+        // 说明[start, start + len)和vma一定有交叉
+        if (start + len > vma->vm_start) {
+            if (len >= vma->vm_start) {
+                // len 太大，导致没有空闲的空间了
+                return 0;
+            }
+            start = vma->vm_start - len;
+        }
+    }
+    return (start >= USER_BASE) ? start : 0;
+}
+
 // 释放[start, end)虚拟地址范围内映射的物理页
 static void unmap_range(pte_t *page_dir, uintptr_t start, uintptr_t end) {
     assert(start % PAGE_SIZE == 0 && end % PAGE_SIZE == 0);
@@ -856,3 +883,46 @@ void print_vma(void) {
     
 }
 
+void lock_mm(MmStruct *mm) {
+    if (mm != NULL) {
+        lock(&(mm->mm_lock));
+        if (current != NULL) {
+            mm->locked_by = current->pid;
+        }
+    } 
+}
+
+void unlock_mm(MmStruct *mm) {
+    if (mm != NULL) {
+        unlock(&(mm->mm_lock));
+        mm->locked_by = 0;
+    }
+}
+
+bool try_lock_mm(MmStruct *mm) {
+    if (mm != NULL) {
+        if (!try_lock(&(mm->mm_lock))) {
+            return false;
+        }
+        if (current != NULL) {
+            mm->locked_by = current->pid;
+        }
+    }
+    return true;
+}
+
+bool copy_from_user(MmStruct *mm, void *dst, const void *src, size_t len, bool writable) {
+    if (!user_mem_check(mm, (uintptr_t)src, len, writable)) {
+        return false;
+    }
+    memcpy(dst, src, len);
+    return true;
+}
+
+bool copy_to_user(MmStruct *mm, void *dst, const void *src, size_t len) {
+    if (!user_mem_check(mm, (uintptr_t)dst, len, true)) {
+        return false;
+    }
+    memcpy(dst, src, len);
+    return true;
+}

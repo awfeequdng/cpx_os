@@ -100,4 +100,8 @@ int do_wait(int pid, int *code_store);
 int do_kill(int pid);
 int do_brk(uintptr_t *brk_store);
 int do_sleep(unsigned int time);
+int do_mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
+int do_munmap(uintptr_t addr, size_t len);
+int do_shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
+
 #endif // __KERNEL_PROCESS_PROCESS_H__

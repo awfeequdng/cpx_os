@@ -72,3 +72,15 @@ int sys_putc(int c) {
 int sys_page_dir(void) {
     return syscall(SYS_pgdir);
 }
+
+int sys_mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
+    return syscall(SYS_mmap, addr_store, len, mmap_flags);
+}
+
+int sys_munmap(uintptr_t addr, size_t len) {
+    return syscall(SYS_munmap, addr, len);
+}
+
+int sys_shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
+    return syscall(SYS_shmem, addr_store, len, mmap_flags);
+}

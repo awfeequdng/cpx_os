@@ -24,6 +24,10 @@
 
 // SYS_fork flags
 #define CLONE_VM        0x00000100  // 如果进程之间共享内存，则设置这个标志
-#define CLONE_THREAD    0x00000100  // 线程组
+#define CLONE_THREAD    0x00000200  // 线程组
+
+// SYS_mmap flags
+#define MMAP_WRITE      0x00000100  
+#define MMAP_STACK      0x00000200
 
 #endif // __LIB_UNISTD_H__
