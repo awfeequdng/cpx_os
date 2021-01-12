@@ -12,13 +12,13 @@
 #include <schedule.h>
 #include <elf.h>
 
-list_entry_t process_list;
+ListEntry process_list;
 
 #define HASH_SHIFT          10
 #define HASH_LIST_SIZE      (1 << HASH_SHIFT)
 #define pid_hashfn(x)       (hash32(x, HASH_SHIFT))
 
-static list_entry_t hash_list[HASH_LIST_SIZE];
+static ListEntry hash_list[HASH_LIST_SIZE];
 
 Process *idle_process = NULL;
 
@@ -49,7 +49,7 @@ static Process *alloc_process(void) {
         process->mm = NULL;
         memset(&(process->context), 0, sizeof(Context));
         process->tf = NULL;
-        process->page_dir = get_boot_page_dir();
+        process->page_dir = (uintptr_t)get_boot_page_dir();
         process->flags = 0;
         memset(process->name, 0, PROCESS_NAME_LEN);
         process->wait_state = 0;
@@ -87,8 +87,8 @@ char *get_process_name(Process *process) {
 static int get_pid(void) {
     static_assert(MAX_PID > MAX_PROCESS);
     Process *process = NULL;
-    list_entry_t *head = &process_list;
-    list_entry_t *entry = NULL;
+    ListEntry *head = &process_list;
+    ListEntry *entry = NULL;
     static int next_safe = MAX_PID;
     static int last_pid = MAX_PID;
     if (++last_pid >= MAX_PID) {
@@ -151,8 +151,8 @@ static void unhash_process(Process *process) {
 
 Process *find_process(int pid) {
     if (0 < pid && pid < MAX_PID) {
-        list_entry_t *head = hash_list + pid_hashfn(pid);
-        list_entry_t *entry = head;
+        ListEntry *head = hash_list + pid_hashfn(pid);
+        ListEntry *entry = head;
         while ((entry = list_next(entry)) != head) {
             Process *process = le2process(entry, hash_link);
             if (process->pid == pid) {
@@ -238,7 +238,7 @@ good_mm:
     }
     mm_count_inc(mm);
     process->mm = mm;
-    process->page_dir = mm->page_dir;
+    process->page_dir = (uintptr_t)mm->page_dir;
     return 0;
 bad_dup_cleanup_mmap:
     exit_mmap(mm);
@@ -533,7 +533,7 @@ static int load_icode(unsigned char *binary, size_t size) {
 
     mm_count_inc(mm);
     current->mm = mm;
-    current->page_dir = mm->page_dir;
+    current->page_dir = (uintptr_t)mm->page_dir;
     lcr3(PADDR(mm->page_dir));
 
     struct TrapFrame *tf = current->tf;
@@ -739,7 +739,6 @@ int do_brk(uintptr_t *brk_store) {
 
 out_unlock:
     unlock_mm(mm);
-
 out:
     *brk_store = mm->brk;
     return 0;
@@ -763,6 +762,7 @@ int do_sleep(unsigned int time) {
     schedule();
 
     del_timer(timer);
+    return 0;
 }
 
 // exec系统调用接口
@@ -807,7 +807,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(sleep);
+    KERNEL_EXECVE(cow_test);
 #endif
     panic("user_main execve failed.\n");
 }

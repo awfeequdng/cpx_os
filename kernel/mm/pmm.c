@@ -191,27 +191,27 @@ static void page_init(void) {
 }
 
 
-static void enable_paging(void) {
-    // 设置页目录地址
-    lcr3(boot_cr3);
+// static void enable_paging(void) {
+//     // 设置页目录地址
+//     lcr3(boot_cr3);
 
-    // 开启分页
-    uintptr_t cr0 = rcr0();
-    cr0 |= CR0_PE | CR0_PG | CR0_AM | CR0_WP | CR0_NE | CR0_TS | CR0_EM | CR0_MP;
-    cr0 &= ~(CR0_TS | CR0_EM);
-    lcr0(cr0);
-}
+//     // 开启分页
+//     uintptr_t cr0 = rcr0();
+//     cr0 |= CR0_PE | CR0_PG | CR0_AM | CR0_WP | CR0_NE | CR0_TS | CR0_EM | CR0_MP;
+//     cr0 &= ~(CR0_TS | CR0_EM);
+//     lcr0(cr0);
+// }
 
 //boot_alloc_page - allocate one page using pmm->alloc_pages(1) 
 // return value: the kernel virtual address of this allocated page
 //note: this function is used to get the memory for PDT(Page Directory Table)&PT(Page Table)
-static void *boot_alloc_page(void) {
-    struct Page *page = alloc_page();
-    if (page == NULL) {
-        panic("boot_alloc_page failed.\n");
-    }
-    return page2kva(page);
-}
+// static void *boot_alloc_page(void) {
+//     struct Page *page = alloc_page();
+//     if (page == NULL) {
+//         panic("boot_alloc_page failed.\n");
+//     }
+//     return page2kva(page);
+// }
 
 extern pte_t entry_page_table[];
 extern pde_t entry_page_dir[];

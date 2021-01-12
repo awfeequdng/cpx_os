@@ -10,7 +10,7 @@ typedef struct {
     uintptr_t start;
     uintptr_t end;
     pte_t *entry;
-    list_entry_t link;
+    ListEntry link;
 } ShareMemNode;
 
 #define SHMN_N_ENTRY    (PAGE_SIZE / sizeof(pte_t))
@@ -19,7 +19,7 @@ typedef struct {
     container_of(entry, ShareMemNode, member)
 
 typedef struct shmem_struct {
-    list_entry_t shmn_link;
+    ListEntry shmn_link;
     ShareMemNode *shmn_cache;
     size_t len;
     atomic_t ref;   // 该结构的引用计数

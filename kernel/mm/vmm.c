@@ -8,6 +8,7 @@
 #include <swap.h>
 #include <string.h>
 #include <process.h>
+#include <stdio.h>
 
 static int vma_compare(rbtree_node_t *node1, rbtree_node_t *node2) {
     VmaStruct *vma1 = rbn2vma(node1, rb_link);
@@ -78,8 +79,8 @@ VmaStruct *find_vma(MmStruct *mm, uintptr_t addr) {
                 vma = find_vma_rb(&(mm->mmap_tree), addr);
             } else {
                 bool found = 0;
-                list_entry_t *head = &(mm->mmap_link);
-                list_entry_t *entry = head;
+                ListEntry *head = &(mm->mmap_link);
+                ListEntry *entry = head;
                 // vma鏈表是按地址從小到大排序的
                 while ((entry = list_next(entry)) != head) {
                     vma = le2vma(entry, vma_link);
@@ -137,10 +138,10 @@ static inline void insert_vma_rb(rbtree_t *tree, VmaStruct *vma, VmaStruct **vma
 // todo: 此处有必要做一下优化，将相邻的并且属性相同的vma合并
 void insert_vma_struct(MmStruct *mm, VmaStruct *vma) {
     assert(vma->vm_start < vma->vm_end);
-    list_entry_t *head = &(mm->mmap_link);
-    list_entry_t *entry_prev = head;
-    list_entry_t *entry_next = NULL;
-    list_entry_t *entry = NULL;
+    ListEntry *head = &(mm->mmap_link);
+    ListEntry *entry_prev = head;
+    ListEntry *entry_next = NULL;
+    ListEntry *entry = NULL;
     
     if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
         VmaStruct *mmap_prev = NULL;
@@ -149,7 +150,7 @@ void insert_vma_struct(MmStruct *mm, VmaStruct *vma) {
             entry_prev = &(mmap_prev->vma_link);
         }
     } else {
-        list_entry_t *entry = head;
+        ListEntry *entry = head;
         while ((entry = list_next(entry)) != head) {
             VmaStruct *mmap_prev = le2vma(entry, vma_link);
             if (mmap_prev->vm_start > vma->vm_start) {
@@ -238,8 +239,8 @@ static void vma_destory(VmaStruct *vma) {
 void mm_destory(MmStruct *mm) {
     // if (rbtree_root(&(mm->mmap_tree)) != rbtree_sentinel(&(mm->mmap_tree))) {
     // }
-    list_entry_t *head = &(mm->mmap_link);
-    list_entry_t *entry = head;
+    ListEntry *head = &(mm->mmap_link);
+    ListEntry *entry = head;
     while ((entry = list_next(entry)) != head) {
         list_del(entry);
         vma_destory(le2vma(entry, vma_link));
@@ -405,7 +406,7 @@ int mm_unmap(MmStruct *mm, uintptr_t addr, size_t len) {
         return 0;
     }
 
-    list_entry_t free_list, *entry;
+    ListEntry free_list, *entry;
     list_init(&free_list);
     // vma->vm_start < end那么[start, end)和[vma->vm_start, vma->vm_end)一定有交叉
     while (vma->vm_start < end) {
@@ -484,31 +485,20 @@ int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool shar
             struct Page *new_page = NULL;
             assert(*ptep != 0 && *new_ptep == 0);
             if (*ptep & PTE_P) {
-                // 为什么只设置PTE_USER一个标志，其他的标志不需要复制吗？
                 uint32_t perm = (*ptep & PTE_USER);
-                if (!share) {
-                    new_page = alloc_page();
-                    if (new_page == NULL) {
-                        return -E_NO_MEM;
-                    }
-                    memcpy(page2kva(new_page), page2kva(pte2page(*ptep)), PAGE_SIZE);
-                } else {
-                    // 实现和from共享内存
-                    new_page = pte2page(*ptep);
+                new_page = pte2page(*ptep);
+                if (!share && (*ptep & PTE_W)) {
+                    // 实现写时复制功能，当父进程的pte具有写标志，将这个标志清除掉，以便在写操作的时候产生page fault
+                    perm &= ~PTE_W;
+                    // 父进程保留页表项之前的PTE_A和PTE_D的标志
+                    page_insert(from, new_page, start, perm | (*ptep & PTE_SWAP));
                 }
+                // 如果父进程之前有PTE_W标志，这个标志会被清除，因此子进程也没有设置PTE_W标志。在有写入时会产生page fault，从而实现写时复制功能
                 ret = page_insert(to, new_page, start, perm);
                 assert(ret == 0);
             } else {
                 // ptep指向swap entry
                 swap_entry_t entry = *ptep;
-                if (!share) {
-                    // swap entry不共享，将*ptep在swap分区中的数据换入到新的page（如果这个page已经被释放的话，也就是在hash list上找不到这个page了）,
-                    // 然后将这个新换入的page拷贝给另一个new_page，并把new_page放入swap框架中，最后返回这个new_page的swap entry,
-                    // 也就是最终的entry，从而实现swap分区数据的拷贝
-                    if (swap_copy_entry(*ptep, &entry) != 0) {
-                        return -E_NO_MEM;
-                    }
-                }
                 swap_duplicate(entry);
                 *new_ptep = entry;
             }
@@ -520,8 +510,8 @@ int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool shar
 
 int dup_mmap(MmStruct *to, MmStruct *from) {
     assert(to != NULL && from != NULL);
-    list_entry_t *head = &(from->mmap_link);
-    list_entry_t *entry = head;
+    ListEntry *head = &(from->mmap_link);
+    ListEntry *entry = head;
     while ((entry = list_prev(entry)) != head) {
         VmaStruct *vma = NULL, *new_vma = NULL;
         vma = le2vma(entry, vma_link);
@@ -549,8 +539,8 @@ int dup_mmap(MmStruct *to, MmStruct *from) {
 void exit_mmap(MmStruct *mm) {
     assert(mm != NULL && mm_count(mm) == 0);
     pde_t *page_dir = mm->page_dir;
-    list_entry_t *head = &(mm->mmap_link);
-    list_entry_t *entry = head;
+    ListEntry *head = &(mm->mmap_link);
+    ListEntry *entry = head;
     while ((entry = list_next(entry)) != head) {
         VmaStruct *vma = le2vma(entry, vma_link);
         unmap_range(page_dir, vma->vm_start, vma->vm_end);
@@ -596,7 +586,7 @@ static void check_vma_struct() {
         insert_vma_struct(mm, vma);
     }
 
-    list_entry_t *entry = list_next(&(mm->mmap_link));
+    ListEntry *entry = list_next(&(mm->mmap_link));
 
     for (i = 0; i <= step2; i++) {
         assert(entry != &(mm->mmap_link));
@@ -679,6 +669,14 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
         goto failed;
     }
 
+    if (vma->vm_flags & VM_STACK) {
+        // todo: 为什么需要判断addr的值不能在vma->vm_start + PAGE_SIZE的下面，
+        //是不是需要用一个page的空间来和其他段分开（比如和堆分开）
+        if (addr < vma->vm_start + PAGE_SIZE) {
+            goto failed;
+        }
+    }
+
     switch (error_code & 3) {
         default:    // default is 3: write, present
         case 2:     // write, not present
@@ -695,7 +693,7 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
                 goto failed;
             }
     }
-    // 用户权限
+    // 用户权限，只有用户空间地址才会产生page fault
     uint32_t perm = PTE_U;
     if (vma->vm_flags & VM_WRITE) {
         perm |= PTE_W;
@@ -719,6 +717,7 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
         } else {
             // vma是共享内存
             shmem_lock(vma->shmem);
+            // vma->shmem_off表示vma->vm_start的值与共享内存开始的地址的偏移量
             uintptr_t shmem_addr = addr - vma->vm_start + vma->shmem_off;
             // 当发生page fault时，vma中的pte是直接从共享内存的pte拷贝过来的，
             // 因此vma设置了VM_SHARE标志时，发生了page fault就先创建共享内存结构中的pte，
@@ -759,7 +758,7 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
         bool dec_swap_entry = false;
         swap_entry_t swap_entry = 0;
         // 页表项没有指向page，或者
-        // 写错误(error_code & 2)，并且pte没有写权限，但是该vma有写的权限没有共享内存。也就是说该vma可写，但是页表项没有设置PTE_W标志，从而导致写时page fault
+        // 写错误(error_code & 2)，并且pte没有写权限，但是该vma有写的权限没有共享内存。也就是说该vma有写权限，但是页表项没有设置PTE_W标志，从而导致写时page fault
         assert(!(*ptep & PTE_P) || ((error_code & 2) && !(*ptep & PTE_W) && cow));
 
         if (cow) {
@@ -847,8 +846,8 @@ void print_vma(void) {
         mm = current->mm;
     }
     VmaStruct *vma = NULL;
-    list_entry_t *head = &(mm->mmap_link);
-    list_entry_t *entry = list_next(head);
+    ListEntry *head = &(mm->mmap_link);
+    ListEntry *entry = list_next(head);
     while (entry != head) {
         vma = le2vma(entry, vma_link);
         printk("(start,end)=(%08x,%08x), flags=%08x \n", vma->vm_start, vma->vm_end, vma->vm_flags);

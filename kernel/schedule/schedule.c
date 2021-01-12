@@ -3,7 +3,7 @@
 #include <schedule.h>
 #include <assert.h>
 
-static list_entry_t timer_list;
+static ListEntry timer_list;
 
 void schedule_init(void) {
     list_init(&timer_list);
@@ -27,8 +27,8 @@ void wakeup_process(Process *process) {
 
 void schedule(void) {
     bool flag;
-    list_entry_t *entry = NULL;
-    list_entry_t *start = NULL;
+    ListEntry *entry = NULL;
+    ListEntry *start = NULL;
     Process *next = NULL;
     local_intr_save(flag);
     {
@@ -61,7 +61,7 @@ void add_timer(Timer *timer) {
     {
         assert(timer->expires > 0 && timer->process != NULL);
         assert(list_empty(&(timer->timer_link)));
-        list_entry_t *entry = list_next(&timer_list);
+        ListEntry *entry = list_next(&timer_list);
         while (entry != &timer_list) {
             Timer *next = le2timer(entry, timer_link);
             if (timer->expires < next->expires) {
@@ -83,7 +83,7 @@ void del_timer(Timer *timer) {
     {
         if (!list_empty(&(timer->timer_link))) {
             if (timer->expires != 0) {
-                list_entry_t *entry = list_next(&timer->timer_link);
+                ListEntry *entry = list_next(&timer->timer_link);
                 if (entry != &timer_list) {
                     Timer *next = le2timer(entry, timer_link);
                     next->expires += timer->expires;
@@ -100,7 +100,7 @@ void run_timer_list(void) {
     bool flag;
     local_intr_save(flag);
     {
-        list_entry_t *entry = list_next(&timer_list);
+        ListEntry *entry = list_next(&timer_list);
         if (entry != &timer_list) {
             Timer *timer = le2timer(entry, timer_link);
             assert(timer->expires != 0);

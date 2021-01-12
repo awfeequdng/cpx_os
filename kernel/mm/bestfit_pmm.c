@@ -35,7 +35,7 @@ static struct Page *bestfit_alloc_pages(size_t n) {
         return NULL;
     }
     struct Page *page = NULL;
-    list_entry_t *entry = &free_list;
+    ListEntry *entry = &free_list;
     while ((entry = list_next(entry)) != &free_list) {
         struct Page *p = le2page(entry, page_link);
         if (p->property >= n) {
@@ -67,7 +67,7 @@ static void bestfit_free_pages(struct Page *base, size_t n) {
     }
     base->property = n;
     SetPageProperty(base);
-    list_entry_t *entry = list_next(&free_list);
+    ListEntry *entry = list_next(&free_list);
     while (entry != &free_list) {
         p = le2page(entry, page_link);
         entry = list_next(entry);
@@ -109,7 +109,7 @@ static void basic_check(void) {
     assert(page2pa(p2) < get_npage() * PAGE_SIZE);
 
 
-    list_entry_t free_list_store = free_list;
+    ListEntry free_list_store = free_list;
     list_init(&free_list);
     assert(list_empty(&free_list));
 
@@ -147,7 +147,7 @@ static void basic_check(void) {
 
 static void bestfit_check(void) {
     int count = 0, total = 0;
-    list_entry_t *le = &free_list;
+    ListEntry *le = &free_list;
     printk("================bestfit_check!=============\n");
     while((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
@@ -162,7 +162,7 @@ static void bestfit_check(void) {
     assert(p0 != NULL);
     assert(!PageProperty(p0));
 
-    list_entry_t free_list_store = free_list;
+    ListEntry free_list_store = free_list;
     list_init(&free_list);
     assert(list_empty(&free_list));
     assert(alloc_page() == NULL);

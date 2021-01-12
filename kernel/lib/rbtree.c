@@ -1,6 +1,7 @@
 #include <rbtree.h>
 #include <slab.h>
 #include <assert.h>
+#include <stdio.h>
 
 rbtree_node_t *rbtree_sentinel(rbtree_t *tree) {
 	return &(tree->sentinel);

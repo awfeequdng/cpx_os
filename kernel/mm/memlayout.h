@@ -84,9 +84,9 @@ struct Page {
     uint32_t flags;                 // array of flags that describe the status of the page frame
     unsigned int property;          // # of pages in continuous memory block
     int zone_num;                   // used in buddy system, the No. of zone which the page belongs to
-    list_entry_t page_link;         // free list link
+    ListEntry page_link;         // free list link
     swap_entry_t index;
-    list_entry_t swap_link;
+    ListEntry swap_link;
 };
 
 /* Flags describing the status of a page frame */
@@ -121,7 +121,7 @@ struct Page {
     container_of((le), struct Page, member)
 
 typedef struct {
-    list_entry_t free_list;
+    ListEntry free_list;
     unsigned int nr_free;
 } free_area_t;
 

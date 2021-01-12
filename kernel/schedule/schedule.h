@@ -8,7 +8,7 @@
 typedef struct timer_t {
     unsigned int expires;
     Process *process;
-    list_entry_t timer_link;
+    ListEntry timer_link;
 } Timer;
 
 #define le2timer(le, member)        \

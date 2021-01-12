@@ -170,6 +170,8 @@ static void trap_dispatch(struct TrapFrame *tf) {
 						panic("handle page fault failed in kernel mode. %e\n", ret);
 					}
 					// 在不能处理page_fault时，进程将要被杀死
+					// 可能在申请页时内存不够，导致do_page_fault返回失败，
+					// 此时内存不够直接杀死进程
 					printk("killed by kernel.\n");
 					do_exit(-E_KILLED);
 				}

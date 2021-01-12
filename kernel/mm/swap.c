@@ -9,6 +9,8 @@
 #include <string.h>
 #include <mmu.h>
 #include <shmem.h>
+#include <stdio.h>
+#include <vmm.h>
 
 size_t max_swap_offset;
 
@@ -21,7 +23,7 @@ void swap_set_max_offset(size_t max_offset) {
 }
 
 typedef struct {
-    list_entry_t swap_link;
+    ListEntry swap_link;
     size_t nr_pages;
 } swap_list_t;
 
@@ -43,7 +45,7 @@ static volatile bool swap_init_ok = 0;
 #define HASH_LIST_SIZE      (1 << HASH_SHIFT)
 #define entry_hashfn(x)     (hash32(x, HASH_SHIFT)) 
 
-static list_entry_t hash_list[HASH_LIST_SIZE];
+static ListEntry hash_list[HASH_LIST_SIZE];
 
 static lock_t swap_in_lock;
 
@@ -163,8 +165,8 @@ static void swap_free_page(struct Page *page) {
 
 // 根据entry，从hash list中找到对应的page
 static struct Page *swap_hash_find(swap_entry_t entry) {
-    list_entry_t *head = hash_list + entry_hashfn(entry);
-    list_entry_t *le = head;
+    ListEntry *head = hash_list + entry_hashfn(entry);
+    ListEntry *le = head;
     while ((le = list_next(le)) != head) {
         struct Page *page = le2page(le, page_link);
         if (page->index == entry) {
@@ -398,8 +400,8 @@ static int page_launder(void) {
 
     size_t max_scan = nr_inactive_pages;
     size_t free_count = 0;
-    list_entry_t *head = &(inactive_list.swap_link);
-    list_entry_t *entry = list_next(head);
+    ListEntry *head = &(inactive_list.swap_link);
+    ListEntry *entry = list_next(head);
     while (max_scan-- > 0 && entry != head) {
         struct Page *page = le2page(entry, swap_link);
         entry = list_next(entry);
@@ -459,8 +461,8 @@ static int page_launder(void) {
 // 当page的引用计数为0时，将page放入swap inactive list
 static void refill_inactive_scan(void) {
     size_t max_scan = nr_active_pages;
-    list_entry_t *head = &(active_list.swap_link);
-    list_entry_t *entry = list_next(head);
+    ListEntry *head = &(active_list.swap_link);
+    ListEntry *entry = list_next(head);
     while (max_scan-- > 0 && entry != head) {
         struct Page *page = le2page(entry, swap_link);
         entry = list_next(entry);
@@ -590,7 +592,7 @@ static int swap_out_mm(MmStruct *mm, size_t require) {
         if (require == 0) {
             break;
         }
-        list_entry_t *entry = list_next(&(vma->vma_link));
+        ListEntry *entry = list_next(&(vma->vma_link));
         if (entry == &(mm->mmap_link)) {
             entry = list_next(entry);
         }
@@ -1207,7 +1209,7 @@ static void check_mm_swap(void) {
         ret = mm_unmap(mm0, addr0 + PAGE_SIZE * i, PAGE_SIZE);
         assert(ret == 0);
         if (i < 8) {
-            ret == mm_map(mm0, addr0 + PAGE_SIZE * i, PAGE_SIZE, 0, NULL);
+            ret = mm_map(mm0, addr0 + PAGE_SIZE * i, PAGE_SIZE, 0, NULL);
             assert(ret == 0);
         }
     }

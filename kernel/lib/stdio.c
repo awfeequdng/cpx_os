@@ -9,5 +9,5 @@ void putchar(int c)
 
 int getchar(void)
 {
-	console_getc();
+	return console_getc();
 }

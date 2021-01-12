@@ -18,7 +18,7 @@
 
 typedef size_t kmem_bufctl_t;
 typedef struct slab_s {
-    list_entry_t slab_link;
+    ListEntry slab_link;
     void *s_mem;        // slab中第一个obj的内核虚拟地址
     size_t inuse;       // 有多少个obj已经被分配了
     size_t offset;      // 第一个obj在slab中的偏移量
@@ -29,8 +29,8 @@ typedef struct slab_s {
     container_of((le), slab_t, member)
 
 typedef struct kmem_cache_s {
-    list_entry_t slabs_full;    // 所有obj都被分配出去的slab链接在此链表
-    list_entry_t slabs_partial;  // slab的obj没有全部分配出去时挂接在该链表
+    ListEntry slabs_full;    // 所有obj都被分配出去的slab链接在此链表
+    ListEntry slabs_partial;  // slab的obj没有全部分配出去时挂接在该链表
     size_t objsize; // slab中obj的大小（以字节为单位）
     size_t num;     // 每个slab中obj的个数
     size_t offset;  // slab中第一个obj的偏移量
@@ -71,7 +71,7 @@ size_t slab_allocated(void) {
     {
         for (i = 0; i < SLAB_CACHE_NUM; i++) {
             kmem_cache_t *cachep = slab_cache + i;
-            list_entry_t *head, *entry;
+            ListEntry *head, *entry;
             head = entry = &(cachep->slabs_full);
             while ((entry = list_next(entry)) != head) {
                 total += cachep->num * cachep->objsize;

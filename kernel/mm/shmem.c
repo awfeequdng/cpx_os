@@ -75,8 +75,8 @@ static ShareMemNode *shmn_find(ShareMemory *sh_mem, uintptr_t addr) {
     // 当前地址在shmn中没有找到
     if (!(shmn != NULL && shmn->start <= addr && addr < shmn->end)) {
         shmn = NULL;
-        list_entry_t *head = &(sh_mem->shmn_link);
-        list_entry_t *entry = head;
+        ListEntry *head = &(sh_mem->shmn_link);
+        ListEntry *entry = head;
         while ((entry = list_next(entry)) != head) {
             ShareMemNode *tmp = le2shmn(entry, link);
             if (tmp->start <= addr && addr < tmp->end) {
@@ -98,10 +98,10 @@ static inline void shmn_check_overlap(ShareMemNode *prev, ShareMemNode *next) {
 }
 
 static void shmn_insert(ShareMemory *sh_mem, ShareMemNode *shmn) {
-    list_entry_t *head = &(sh_mem->shmn_link);
-    list_entry_t *entry = head;
-    list_entry_t *entry_prev = head;
-    list_entry_t *entry_next = NULL;
+    ListEntry *head = &(sh_mem->shmn_link);
+    ListEntry *entry = head;
+    ListEntry *entry_prev = head;
+    ListEntry *entry_next = NULL;
     while ((entry = list_next(entry)) != head) {
         ShareMemNode *shmn_prev = le2shmn(entry, link);
         if (shmn_prev->start > shmn->start) {
@@ -122,8 +122,8 @@ static void shmn_insert(ShareMemory *sh_mem, ShareMemNode *shmn) {
 }
 
 void shmem_destory(ShareMemory *sh_mem) {
-    list_entry_t *head = &(sh_mem->shmn_link);
-    list_entry_t *entry = NULL;
+    ListEntry *head = &(sh_mem->shmn_link);
+    ListEntry *entry = NULL;
     while ((entry = list_next(head)) != head) {
         list_del(entry);
         shmn_destory(le2shmn(entry, link));

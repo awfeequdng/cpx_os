@@ -35,8 +35,8 @@ typedef struct context_struct {
 #define MAX_PROCESS         4096
 #define MAX_PID             (MAX_PROCESS * 2)
 
-// list_entry_t *get_process_list(void);
-extern list_entry_t process_list;
+// ListEntry *get_process_list(void);
+extern ListEntry process_list;
 
 struct mm_struct;
 
@@ -53,8 +53,8 @@ typedef struct process_struct {
     uintptr_t page_dir;             // 进程页目录地址
     uint32_t flags;                 // 进程标志
     char name[PROCESS_NAME_LEN + 1];
-    list_entry_t process_link;      // 进程双向链表，所有进程挂载在process_list链表下
-    list_entry_t hash_link;         // 进程的hash list
+    ListEntry process_link;      // 进程双向链表，所有进程挂载在process_list链表下
+    ListEntry hash_link;         // 进程的hash list
     int exit_code;
     uint32_t wait_state;
     // child为孩子节点，left_sibling为左边的兄弟，right_sibling为右边的兄弟

@@ -18,7 +18,7 @@ typedef struct {
     uintptr_t vm_end;
     uint32_t vm_flags;
     rbtree_node_t rb_link;
-    list_entry_t vma_link;
+    ListEntry vma_link;
     ShareMemory *shmem;
     size_t shmem_off;
 } VmaStruct;
@@ -36,7 +36,7 @@ typedef struct {
 #define VM_SHARE        0x00000010
 
 typedef struct mm_struct {
-    list_entry_t mmap_link;
+    ListEntry mmap_link;
     rbtree_t mmap_tree;        // 紅黑樹，用於鏈接VmmStruct，紅黑樹按照vmm的start 地址排序
     VmaStruct *mmap_cache;
     pde_t *page_dir;
@@ -58,6 +58,8 @@ VmaStruct *find_vma_intersection(MmStruct *mm, uintptr_t start, uintptr_t end);
 int mm_brk(MmStruct *mm, uintptr_t addr, size_t len);
 MmStruct *mm_create(void);
 void mm_destory(MmStruct *mm);
+int mm_map_shmem(MmStruct *mm, uintptr_t addr, uint32_t vm_flags,
+        ShareMemory *shmem, VmaStruct **vma_store);
 
 int mm_map(MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
          VmaStruct **vma_store);

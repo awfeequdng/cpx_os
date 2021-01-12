@@ -26,7 +26,7 @@ static void default_init_memmap(struct Page *base, size_t n) {
 
 static struct Page *default_alloc_pages(size_t n) {
     assert(n==1);
-    list_entry_t *entry;
+    ListEntry *entry;
     if ((entry = list_next(&free_list)) != &free_list) {
         nr_free--;
         list_del(entry);
@@ -62,7 +62,7 @@ static void basic_check(void) {
     assert(page2pa(p1) < get_npage() * PAGE_SIZE);
     assert(page2pa(p2) < get_npage() * PAGE_SIZE);
 
-    list_entry_t free_list_store = free_list;
+    ListEntry free_list_store = free_list;
     list_init(&free_list);
     assert(list_empty(&free_list));
 

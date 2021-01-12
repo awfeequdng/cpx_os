@@ -45,7 +45,8 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/schedule/schedule.c \
 		kernel/process/entry.S \
 		kernel/process/switch.S \
-		kernel/syscall/syscall.c
+		kernel/syscall/syscall.c \
+		kernel/sync/wait.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \
