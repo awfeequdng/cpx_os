@@ -138,7 +138,7 @@ static void page_init(void) {
     struct E820Map *memmap = (struct E820Map *)(0x8000 + KERNEL_BASE);
     uint64_t max_phy_addr = 0;
 
-    printk("e820 map:\n");
+    printk("e820 map: nr_map = %d\n", memmap->nr_map);
     int i;
     for (i = 0; i < memmap->nr_map; i++) {
         uint64_t begin = memmap->map[i].addr;
@@ -160,7 +160,6 @@ static void page_init(void) {
     extern char end[];
     pages_num = max_phy_addr / PAGE_SIZE;
     pages_base = (struct Page *)ROUNDUP((void *)end, PAGE_SIZE);
-
     for (i = 0; i < pages_num; i++) {
         SetPageReserved(pages_base + i);
     }

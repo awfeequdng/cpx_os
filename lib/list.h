@@ -2,6 +2,7 @@
 #define __LIBS_LIST_H__
 
 #include <types.h>
+
 typedef struct list_entry {
     struct list_entry *prev, *next;
 } ListEntry;

@@ -908,7 +908,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(thread_test);
+    KERNEL_EXECVE(skiplist_test);
 #endif
     panic("user_main execve failed.\n");
 }

@@ -96,9 +96,9 @@ build: $(USER_BINS) $(IMAGES) $(SWAPIMG)
 GDB_PORT = $(shell expr `id -u` % 5000 + 25000)
 
 # QEMUOPTS = -S -s -hda ./$(IMAGES) -monitor stdio 
-QEMUOPTS = -m 48m -drive file=$(IMAGES),index=0,media=disk,format=raw -serial mon:stdio -gdb tcp::$(GDB_PORT)
+QEMUOPTS = -m 64m -drive file=$(IMAGES),index=0,media=disk,format=raw -serial mon:stdio -gdb tcp::$(GDB_PORT)
 QEMUOPTS += -drive file=$(SWAPIMG),index=1,media=disk,format=raw,cache=writeback
-#QEMUOPTS = -drive file=$(IMAGES),index=0,media=disk,format=raw -gdb tcp::$(GDB_PORT)
+# QEMUOPTS = -drive file=$(IMAGES),index=0,media=disk,format=raw -gdb tcp::$(GDB_PORT)
 
 .gdbinit: .gdbinit.tmp
 	sed "s/localhost:1234/localhost:$(GDB_PORT)/" < $< > $@
