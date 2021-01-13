@@ -72,3 +72,13 @@ int munmap(uintptr_t addr, size_t len) {
 int shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
     return sys_shmem(addr_store, len, mmap_flags);
 }
+
+int __clone(uint32_t clone_flags, uintptr_t stack, int (*fn)(void *), void *arg);
+
+int clone(uint32_t clone_flags, uintptr_t stack, int (*fn)(void *), void *arg) {
+    int ret;
+    lock_fork();
+    ret = __clone(clone_flags, stack, fn, arg);
+    unlock_fork();
+    return ret;
+}

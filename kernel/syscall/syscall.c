@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <clock.h>
+#include <trap.h>
+#include <error.h>
 
 static uint32_t sys_exit(uint32_t arg[]) {
     int error_code = (int)arg[0];
@@ -30,9 +32,25 @@ static uint32_t sys_exec(uint32_t arg[]) {
     return do_execve(name, len, binary, size);
 }
 
+static uint32_t sys_clone(uint32_t arg[]) {
+    struct TrapFrame *tf = current->tf;
+    uint32_t clone_flags = (uint32_t)arg[0];
+    uintptr_t stack = (uintptr_t)arg[1];
+    if (stack == 0) {
+        // 采用内核堆栈
+        stack = tf->tf_esp;
+    }
+    return do_fork(clone_flags, stack, tf);
+}
+
+static uint32_t sys_exit_thread(uint32_t arg[]) {
+    int error_code = (int)arg[0];
+    return do_exit_thread(error_code);
+}
+
 static uint32_t sys_kill(uint32_t arg[]) {
     int32_t pid = (int32_t)arg[0];
-    return do_kill(pid);
+    return do_kill(pid, -E_KILLED);
 }
 
 static uint32_t sys_sleep(uint32_t arg[]) {
@@ -93,6 +111,8 @@ static uint32_t (*syscalls[])(uint32_t arg[]) = {
     [SYS_fork] = sys_fork,
     [SYS_wait] = sys_wait,
     [SYS_exec] = sys_exec,
+    [SYS_clone] = sys_clone,
+    [SYS_exit_thread] = sys_exit_thread,
     [SYS_yield] = sys_yield,
     [SYS_kill] = sys_kill,
     [SYS_getpid] = sys_getpid,

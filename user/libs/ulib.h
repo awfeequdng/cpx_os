@@ -35,5 +35,6 @@ void print_page_dir(void);
 int mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
 int munmap(uintptr_t addr, size_t len);
 int shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
+int clone(uint32_t clone_flags, uintptr_t stack, int (*fn)(void *), void *arg);
 
 #endif // __USER_LIBS_ULIB_H__

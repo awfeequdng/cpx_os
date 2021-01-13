@@ -60,6 +60,7 @@ static Process *alloc_process(void) {
         process->child = NULL;
         process->left_sibling = NULL;
         process->right_sibling = NULL;
+        list_init(&(process->thread_group));
     }
     return process;
 }
@@ -191,7 +192,6 @@ static void put_kstack(Process *process) {
     free_pages(kva2page((void *)process->kstack), K_STACK_PAGE);
 }
 
-
 static int setup_page_dir(MmStruct *mm) {
     struct Page *page = NULL;
     if ((page = alloc_page()) == NULL) {
@@ -202,6 +202,22 @@ static int setup_page_dir(MmStruct *mm) {
     page_dir[PDX(VPT)] = PADDR(page_dir) | PTE_P | PTE_W;
     mm->page_dir = page_dir;
     return 0;
+}
+
+// 将process这个线程从线程组中删除
+static void delete_thread(Process *process) {
+    if (!list_empty(&process->thread_group)) {
+        bool flag;
+        local_intr_save(flag);
+        {
+            list_del_init(&(process->thread_group));
+        }
+        local_intr_restore(flag);
+    }
+}
+
+static Process *next_thread(Process *process) {
+    return le2process(list_next(&(process->thread_group)), thread_group);
 }
 
 // 根据clone_flags标志是否复制或者共享当前的进程'current'
@@ -273,6 +289,12 @@ static void copy_thread(Process *process, uintptr_t esp, struct TrapFrame *tf) {
     process->context.esp = (uintptr_t)(process->tf);
 }
 
+void may_killed(void) {
+    if (current->flags & PF_EXITING) {
+        __do_exit();
+    }
+}
+
 
 static void set_links(Process *process) {
     list_add(&process_list, &(process->process_link));
@@ -301,6 +323,11 @@ static void remove_links(Process *process) {
     nr_process--;
 }
 
+// 父进程创建子进程
+// 1、调用alloc_process分配一个进程结构
+// 2、调用setup_kstack来为新进程分配一个新的子进程内核堆栈
+// 3、调用copy_mm来复制或者共享父进程的内存地址空间（根据clone_flags标志选择复制还是共享）
+// 4、调用wakeup_process来唤醒子进程
 int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
     int ret = -E_NO_FREE_PROCESS;
     Process *process = NULL;
@@ -330,9 +357,11 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
     {
         process->pid = get_pid();
         hash_process(process);
-        // list_add(&process_list, &(process->process_link));
-        // nr_process++;
         set_links(process);
+        // 创建线程
+        if (clone_flags & CLONE_THREAD) {
+            list_add_before(&(current->thread_group), &(process->thread_group));
+        }
     }
     local_intr_restore(flag);
 
@@ -350,13 +379,28 @@ bad_fork_cleanup_process:
     goto fork_out;
 }
 
+static int __do_kill(Process *process, int error_code) {
+    if (!(process->flags & PF_EXITING)) {
+        process->flags |= PF_EXITING;
+        process->exit_code = error_code;
+        if (process->wait_state & WT_INTERRUPTED) {
+            wakeup_process(process);
+        }
+        return 0;
+    }
+    return -E_KILLED;
+}
 
-int do_exit(int error_code) {
+// __do_exit: 线程退出时调用该函数，主线程退出时，
+// 1、调用exit_mmap、put_pgdir以及mm_destory释放进程的所有内存空间
+// 2、设置进程的状态为ZOMBIE，然后唤醒父进程来回收自己；
+// 3、最后调用scheduler调度器切换进程（从此不会再执行到自己了）
+int __do_exit() {
     if (current == idle_process) {
         panic("idle_process exit.\n");
     }
     if (current == init_process) {
-        panic("init_process exit. pid = %d, error_code = %d\n", current->pid, error_code);
+        panic("init_process exit. pid = %d, error_code = %d\n", current->pid, current->exit_code);
     }
 
     MmStruct *mm = current->mm;
@@ -377,31 +421,44 @@ int do_exit(int error_code) {
         current->mm = NULL;
     }
     current->state = STATE_ZOMBIE;
-    current->exit_code = error_code;
 
     bool flag;
+    Process *parent = NULL;
     Process *process = NULL;
     local_intr_save(flag);
     {
-        process = current->parent;
-        if (process->wait_state == WT_CHILD) {
-            // 父进程在等待子进程结束, 唤醒父进程
-            wakeup_process(process);
+        process = parent = current->parent;
+        // 父进程的所有线程如果有处于等待子进程结束时，把他们都唤醒
+        do {
+            if (process->wait_state == WT_CHILD) {
+                // 父进程(或者父进程的所有线程)在等待子进程结束, 唤醒父进程（或线程）
+                wakeup_process(parent);
+            }
+            process = next_thread(process);
+        } while (process != parent);
+
+        // 如果current在一个线程组中，则将current的下一个线程作为current的孩子的父亲节点
+        if ((parent = next_thread(current)) == current) {
+            // 如果当前current没有和其他线程组成线程组，那么把current的孩子挂接到init_process进程
+            parent = init_process;
         }
+        // 将current从线程组中删除（如果存在线程组的话）
+        delete_thread(current);
         // 将current的孩子挂接到init_process节点下（为init_process的孩子）
         while (current->child != NULL) {
             process = current->child;
             current->child = process->right_sibling;
             process->left_sibling = NULL;
-            if ((process->right_sibling = init_process->child) != NULL) {
-                init_process->child->left_sibling = process;
+
+            if ((process->right_sibling = parent->child) != NULL) {
+                parent->child->left_sibling = process;
             }
-            process->parent = init_process;
-            init_process->child = process;
+            process->parent = parent;
+            parent->child = parent;
             if (process->state == STATE_ZOMBIE) {
-                // process已经结束，并且init_process在等待子进程结束
-                if (init_process->wait_state == WT_CHILD) {
-                    wakeup_process(init_process);
+                // process已经结束，并且prarent在等待子进程结束
+                if (parent->wait_state == WT_CHILD) {
+                    wakeup_process(parent);
                 }
             }
         }
@@ -410,6 +467,29 @@ int do_exit(int error_code) {
 
     schedule();
     panic("do_exit will not return!! %d.\n", current->pid);
+}
+
+// 杀死线程组内的所有线程（包括线程leader）
+int do_exit(int error_code) {
+    bool flag;
+    local_intr_save(flag);
+    {
+        ListEntry *head = &(current->thread_group);
+        ListEntry *entry = head;
+        while ((entry = list_next(entry)) != head) {
+            Process *process = le2process(entry, thread_group);
+            // 1、把所有的子线程先杀死
+            __do_kill(process, error_code);
+        }
+    }
+    local_intr_restore(flag);
+    // 2、然后自己再退出
+    return do_exit_thread(error_code);
+}
+
+int do_exit_thread(int error_code) {
+    current->exit_code = error_code;
+    return __do_exit();
 }
 
 // load_icode -  called by sys_exec-->do_execve
@@ -705,18 +785,10 @@ found:
 }
 
 // 强制杀死process，设置process的flags为PF_EXITING
-int do_kill(int pid) {
+int do_kill(int pid, int error_code) {
     Process *process = NULL;
     if ((process = find_process(pid)) != NULL) {
-        if (!(process->flags & PF_EXITING)) {
-            process->flags |= PF_EXITING;
-            // process处于等待状态，这个状态可以被中断
-            if (process->wait_state & WT_INTERRUPTED) {
-                wakeup_process(process);
-            }
-            return 0;
-        }
-        return -E_KILLED;
+        return __do_kill(process, error_code);
     }
     return -E_INVAL;
 }
@@ -836,7 +908,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(shmem_test);
+    KERNEL_EXECVE(thread_test);
 #endif
     panic("user_main execve failed.\n");
 }

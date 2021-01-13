@@ -62,6 +62,7 @@ typedef struct process_struct {
     uint32_t wait_state;
     // child为孩子节点，left_sibling为左边的兄弟，right_sibling为右边的兄弟
     struct process_struct *child, *left_sibling, *right_sibling;
+    ListEntry thread_group;
 } Process;
 
 #define PF_EXITING                  0x00000001  // getting shutdown
@@ -97,7 +98,7 @@ int do_exit(int error_code);
 int do_execve(const char *name, size_t len, unsigned char *binary, size_t size);
 int do_yield(void);
 int do_wait(int pid, int *code_store);
-int do_kill(int pid);
+int do_kill(int pid, int error_code);
 int do_brk(uintptr_t *brk_store);
 int do_sleep(unsigned int time);
 int do_mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
