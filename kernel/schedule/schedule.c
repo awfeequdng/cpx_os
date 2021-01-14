@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <schedule_FCFS.h>
 #include <schedule_RR.h>
+#include <schedule_MLFQ.h>
 
 static ListEntry timer_list;
 
@@ -34,17 +35,24 @@ static void schedule_class_process_tick(Process *process) {
     }
 }
 
-static RunQueue __run_quque;
+static RunQueue __run_quque[4];
 
 void schedule_init(void) {
     list_init(&timer_list);
 
-    // schedule_class = get_FCFS_schedule_class();
-    schedule_class = get_RR_schedule_class();
-    run_queue = &__run_quque;
-    schedule_class->init(run_queue);
+    run_queue = __run_quque;
+    list_init(&(run_queue->rq_link));
+    run_queue->max_time_slice = 8;
+    int i;
+    for (i = 1; i < ARRAY_SIZE(__run_quque); i++) {
+        list_add_before(&(run_queue->rq_link), &(__run_quque[i].rq_link));
+        __run_quque[i].max_time_slice = run_queue->max_time_slice * (1 << i);
+    }
     
-    run_queue->max_time_slice = 20; // 进程的最大时间片为20ms
+    schedule_class = get_MLFQ_schedule_class();
+    // schedule_class = get_RR_schedule_class();
+    schedule_class->init(run_queue);
+
     printk("schedule class: %s\n", schedule_class->name);
 }
 

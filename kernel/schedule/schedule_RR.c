@@ -26,7 +26,6 @@ static void RR_dequeue(RunQueue *rq, Process *process) {
     rq->process_count--;
 }
 
-
 static Process *RR_pick_next(RunQueue *rq) {
     ListEntry *entry = list_next(&(rq->run_list));
     if (entry != &(rq->run_list)) {

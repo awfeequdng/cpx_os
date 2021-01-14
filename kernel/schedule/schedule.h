@@ -26,7 +26,11 @@ typedef struct run_queue {
     ListEntry run_list;
     unsigned int process_count;
     int max_time_slice;
+    ListEntry rq_link;
 } RunQueue;
+
+#define le2runqueue(le, member)     \
+    container_of(le, RunQueue, member)
 
 typedef struct sched_class {
     const char *name;
