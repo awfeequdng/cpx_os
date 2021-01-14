@@ -63,6 +63,7 @@ static Process *alloc_process(void) {
         list_init(&(process->thread_group));
         process->rq = NULL;
         list_init(&(process->run_link));
+        process->time_slice = 0;
     }
     return process;
 }
@@ -338,6 +339,11 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
 
     process->parent = current;
     assert(current->wait_state == 0);
+
+    assert(current->time_slice >= 0);
+    // 当前进程分二分之一的时间片给子进程
+    process->time_slice = current->time_slice >> 1;
+    current->time_slice -= process->time_slice;
 
     if (setup_kstack(process) != 0) {
         goto bad_fork_cleanup_process;

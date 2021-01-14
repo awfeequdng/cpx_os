@@ -2,8 +2,9 @@
 #include <sync.h>
 #include <schedule.h>
 #include <assert.h>
-#include <schedule_FCFS.h>
 #include <stdio.h>
+#include <schedule_FCFS.h>
+#include <schedule_RR.h>
 
 static ListEntry timer_list;
 
@@ -38,10 +39,12 @@ static RunQueue __run_quque;
 void schedule_init(void) {
     list_init(&timer_list);
 
-    schedule_class = get_FCFS_schedule_class();
+    // schedule_class = get_FCFS_schedule_class();
+    schedule_class = get_RR_schedule_class();
     run_queue = &__run_quque;
     schedule_class->init(run_queue);
-
+    
+    run_queue->max_time_slice = 20; // 进程的最大时间片为20ms
     printk("schedule class: %s\n", schedule_class->name);
 }
 

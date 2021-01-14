@@ -25,6 +25,7 @@ static inline Timer *timer_init(Timer *timer, Process *process, int expires) {
 typedef struct run_queue {
     ListEntry run_list;
     unsigned int process_count;
+    int max_time_slice;
 } RunQueue;
 
 typedef struct sched_class {

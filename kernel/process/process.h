@@ -65,8 +65,9 @@ typedef struct process_struct {
     // child为孩子节点，left_sibling为左边的兄弟，right_sibling为右边的兄弟
     struct process_struct *child, *left_sibling, *right_sibling;
     ListEntry thread_group;
-    struct run_queue *rq;
-    ListEntry run_link;
+    struct run_queue *rq;       
+    ListEntry run_link;         // 该链表将进程链接进进程调度的队列
+    int time_slice;             // 进程占用CPU的时间片
 } Process;
 
 #define PF_EXITING                  0x00000001  // getting shutdown
