@@ -61,6 +61,8 @@ static Process *alloc_process(void) {
         process->left_sibling = NULL;
         process->right_sibling = NULL;
         list_init(&(process->thread_group));
+        process->rq = NULL;
+        list_init(&(process->run_link));
     }
     return process;
 }
@@ -288,13 +290,6 @@ static void copy_thread(Process *process, uintptr_t esp, struct TrapFrame *tf) {
     process->context.eip = (uintptr_t)forkret;
     process->context.esp = (uintptr_t)(process->tf);
 }
-
-void may_killed(void) {
-    if (current->flags & PF_EXITING) {
-        __do_exit();
-    }
-}
-
 
 static void set_links(Process *process) {
     list_add(&process_list, &(process->process_link));
@@ -651,7 +646,7 @@ static int load_icode(unsigned char *binary, size_t size) {
     tf->tf_eflags = FL_IF;
     printk("tf_eip = 0x%08x\n", tf->tf_eip);
     ret = 0;
-out:
+
     return ret;
 bad_cleanup_mmap:
     exit_mmap(mm);
@@ -938,7 +933,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(thread_fork);
+    KERNEL_EXECVE(matrix);
 #endif
     panic("user_main execve failed.\n");
 }
@@ -1138,6 +1133,12 @@ int do_shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
 out_unlock:
     unlock_mm(mm);
     return ret;
+}
+
+void may_killed(void) {
+    if (current->flags & PF_EXITING) {
+        __do_exit();
+    }
 }
 
 static void inline print_process(Process *process, int level) {

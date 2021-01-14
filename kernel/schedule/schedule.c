@@ -2,11 +2,47 @@
 #include <sync.h>
 #include <schedule.h>
 #include <assert.h>
+#include <schedule_FCFS.h>
+#include <stdio.h>
 
 static ListEntry timer_list;
 
+static ScheduleClass *schedule_class;
+
+static RunQueue *run_queue;
+
+static inline void schedule_class_enqueue(Process *process) {
+    if (process != idle_process) {
+        schedule_class->enqueue(run_queue, process);
+    }
+}
+
+static inline void schedule_class_dequeue(Process *process) {
+    schedule_class->dequeue(run_queue, process);
+}
+
+static inline Process *schedule_class_pick_next(void) {
+    return schedule_class->pick_next(run_queue);
+}
+
+static void schedule_class_process_tick(Process *process) {
+    if (process != idle_process) {
+        schedule_class->process_tick(run_queue, process);
+    } else {
+        process->need_resched = true;
+    }
+}
+
+static RunQueue __run_quque;
+
 void schedule_init(void) {
     list_init(&timer_list);
+
+    schedule_class = get_FCFS_schedule_class();
+    run_queue = &__run_quque;
+    schedule_class->init(run_queue);
+
+    printk("schedule class: %s\n", schedule_class->name);
 }
 
 void wakeup_process(Process *process) {
@@ -17,6 +53,9 @@ void wakeup_process(Process *process) {
         if (process->state != STATE_RUNNABLE) {
             process->state = STATE_RUNNABLE;
             process->wait_state = 0;
+            if (process != current) {
+                schedule_class_enqueue(process);
+            }
         } else {
             warn("wakeup runnable process.\n");
         }
@@ -27,24 +66,18 @@ void wakeup_process(Process *process) {
 
 void schedule(void) {
     bool flag;
-    ListEntry *entry = NULL;
-    ListEntry *start = NULL;
     Process *next = NULL;
     local_intr_save(flag);
     {
-        current->need_resched = 0;
-        start = (current == idle_process) ? &process_list : &(current->process_link);
-        entry = start;
-        do {
-            if ((entry = list_next(entry)) != &process_list) {
-                next = le2process(entry, process_link);
-                if (next->state == STATE_RUNNABLE) {
-                    break;
-                }
-            }
-        } while (entry != start);
-
-        if (next == NULL || next->state != STATE_RUNNABLE) {
+        current->need_resched = false;
+        if (current->state == STATE_RUNNABLE) {
+            // 当前进程还可以继续被调度
+            schedule_class_enqueue(current);
+        }
+        if ((next = schedule_class_pick_next()) != NULL) {
+            schedule_class_dequeue(next);
+        }
+        if (next == NULL) {
             next = idle_process;
         }
         next->runs++;
@@ -121,6 +154,8 @@ void run_timer_list(void) {
                 timer = le2timer(entry, timer_link);
             }
         }
+        // 根据系统滴答来给当前进程计时
+        schedule_class_process_tick(current);
     }
     local_intr_restore(flag);
 }

@@ -43,6 +43,8 @@ extern ListEntry process_mm_list;
 
 struct mm_struct;
 
+struct run_queue;
+
 typedef struct process_struct {
     enum ProcessState state;
     int pid;
@@ -63,6 +65,8 @@ typedef struct process_struct {
     // child为孩子节点，left_sibling为左边的兄弟，right_sibling为右边的兄弟
     struct process_struct *child, *left_sibling, *right_sibling;
     ListEntry thread_group;
+    struct run_queue *rq;
+    ListEntry run_link;
 } Process;
 
 #define PF_EXITING                  0x00000001  // getting shutdown
@@ -98,6 +102,7 @@ void may_killed(void);
 Process *find_process(int pid);
 int do_fork(uint32_t clone_flags, uintptr_t statck, struct TrapFrame *tf);
 int do_exit(int error_code);
+int do_exit_thread(int error_code);
 int do_execve(const char *name, size_t len, unsigned char *binary, size_t size);
 int do_yield(void);
 int do_wait(int pid, int *code_store);

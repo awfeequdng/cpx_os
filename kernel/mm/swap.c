@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <vmm.h>
 #include <process.h>
+#include <schedule.h>
 #include <wait.h>
 #include <sync.h>
 
