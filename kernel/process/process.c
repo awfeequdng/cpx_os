@@ -428,16 +428,16 @@ int __do_exit() {
     local_intr_save(flag);
     {
         process = parent = current->parent;
-        // 父进程的所有线程如果有处于等待子进程结束时，把他们都唤醒
+        // 如果父进程所在线程组有处于WT_CHILD等待状态的进程，将其唤醒
         do {
             if (process->wait_state == WT_CHILD) {
-                // 父进程(或者父进程的所有线程)在等待子进程结束, 唤醒父进程（或线程）
-                wakeup_process(parent);
+                wakeup_process(process);
             }
             process = next_thread(process);
         } while (process != parent);
 
         // 如果current在一个线程组中，则将current的下一个线程作为current的孩子的父亲节点
+        // todo: 如果我此时current是线程组的leader时，那么得到的parent就是current的孩子了，那么下面的将current的孩子挂在current的孩子上岂不是会出问题？？
         if ((parent = next_thread(current)) == current) {
             // 如果当前current没有和其他线程组成线程组，那么把current的孩子挂接到init_process进程
             parent = init_process;
@@ -454,9 +454,9 @@ int __do_exit() {
                 parent->child->left_sibling = process;
             }
             process->parent = parent;
-            parent->child = parent;
+            parent->child = process;
             if (process->state == STATE_ZOMBIE) {
-                // process已经结束，并且prarent在等待子进程结束
+                // process已经结束，并且parent在等待子进程结束
                 if (parent->wait_state == WT_CHILD) {
                     wakeup_process(parent);
                 }
@@ -665,9 +665,6 @@ bad_mm:
 
 int do_execve(const char *name, size_t len, unsigned char *binary, size_t size) {
     MmStruct *mm = current->mm;
-    if (!user_mem_check(mm, (uintptr_t)name, len, 0)) {
-        return -E_INVAL;
-    }
 
     if (len > PROCESS_NAME_LEN) {
         len = PROCESS_NAME_LEN;
@@ -675,7 +672,16 @@ int do_execve(const char *name, size_t len, unsigned char *binary, size_t size) 
 
     char local_name[PROCESS_NAME_LEN + 1];
     memset(local_name, 0, sizeof(local_name));
-    memcpy(local_name, name, len);
+
+    lock_mm(mm);
+    {
+        if (!copy_from_user(mm, local_name, name, len, 0)) {
+            unlock_mm(mm);
+            return -E_INVAL;
+        }
+    }
+    unlock_mm(mm);
+    
     
     if (mm != NULL) {
         // 切换到内核地址空间，因为进程mm要被释放掉了
@@ -703,6 +709,9 @@ int do_execve(const char *name, size_t len, unsigned char *binary, size_t size) 
         goto execve_exit;
     }
     set_process_name(current, local_name);
+    // 当前进程为为新的内存地址空间
+    // todo: 为什么execve新进程后将其从线程组中移除
+    delete_thread(current);
     printk("current pid = %d, name = %s\n", current->pid, current->name);
     return 0;
 
@@ -716,39 +725,48 @@ int do_yield(void) {
     return 0;
 }
 
+// 等待进程的孩子结束，此时如果进程在线程组中，如果进程没有ZOMBIE状态的孩子，那么就查找线程组中其他线程的孩子是否存于ZOMBIE状态
 int do_wait(int pid, int *code_store) {
     MmStruct *mm = current->mm;
-    if (code_store != NULL) {
-        if (!user_mem_check(mm, (uintptr_t)code_store, sizeof(int), 1)) {
-            return -E_INVAL;
-        }
-    }
 
     Process *process = NULL;
+    Process *parent_process = NULL;
     bool flag;
     // 是否继续等待子进程结束
     bool wait_again;
 repeat:
+    parent_process = current;
     wait_again = false;
     if (pid != 0) {
         process = find_process(pid);
-        // 找到pid对应的子进程
-        if (process != NULL && process->parent == current) {
-            wait_again = true;
-            if (process->state == STATE_ZOMBIE) {
-                goto found;
-            }
+        // 找到pid对应的进程
+        if (process != NULL) {
+            do {
+                if (process->parent == parent_process) {
+                    wait_again = true;
+                    if (process->state == STATE_ZOMBIE) {
+                        goto found;
+                    }
+                    // 子进程不是ZOMBIE状态，跳出去继续等待
+                    break;
+                }
+                // 在线程组中查找process的父进程
+                parent_process = next_thread(parent_process);
+            } while (parent_process != current);
         }
     } else {
-        process = current->child;
-        // 当前进程存在子进程
-        while (process != NULL) {
-            wait_again = true;
-            if (process->state == STATE_ZOMBIE) {
-                goto found;
+        do {
+            process = parent_process->child;
+            // 当前线程组存在子孩子
+            while (process != NULL) {
+                wait_again = true;
+                if (process->state == STATE_ZOMBIE) {
+                    goto found;
+                }
+                process = process->right_sibling;
             }
-            process = process->right_sibling;
-        }
+            parent_process = next_thread(parent_process);
+        } while (parent_process != current);
     }
     // 找到子进程，但是子进程还没有结束
     // 在等待子进程结束的时候，如果当前进程current被杀死，则直接退出
@@ -756,9 +774,7 @@ repeat:
         current->state = STATE_SLEEPING;
         current->wait_state = WT_CHILD;
         schedule();
-        if (current->flags & PF_EXITING) {
-            do_exit(-E_KILLED);
-        }
+        may_killed();
         goto repeat;
     }
     // pid不等于0时，找不到对应pid对应的process；
@@ -769,19 +785,32 @@ found:
     if (process == idle_process || process == init_process) {
         panic("wait idle_process or init_process.\n");
     }
-    if (code_store != NULL) {
-        *code_store = process->exit_code;
-    }
+    
+    int exit_code = process->exit_code;
+
     local_intr_save(flag);
     {
         unhash_process(process);
         remove_links(process);
+        // 在进程执行__do_exit时，已经从线程组中将进程移除了
+        // delete_thread(process);
     }
     local_intr_restore(flag);
     // ZOMBIE状态的process堆栈是没有释放的，这个堆栈可以用来调试
     put_kstack(process);
     kfree(process);
-    return 0;
+
+    int ret = 0;
+    if (code_store != NULL) {
+        lock_mm(mm);
+        {
+            if (!copy_to_user(mm, code_store, &exit_code, sizeof(exit_code))) {
+                ret = -E_INVAL;
+            }
+        }
+        unlock_mm(mm);
+    }
+    return ret;
 }
 
 // 强制杀死process，设置process的flags为PF_EXITING
@@ -802,24 +831,25 @@ int do_brk(uintptr_t *brk_store) {
     if (brk_store == NULL) {
         return -E_INVAL;
     }
-    if (!user_mem_check(mm, (uintptr_t)brk_store, sizeof(uintptr_t), 1)) {
+    // 希望申请的新的brk的值
+    uintptr_t brk;
+    lock_mm(mm);
+    if (!copy_from_user(mm, &brk, brk_store, sizeof(uintptr_t), true)) {
+        unlock_mm(mm);
         return -E_INVAL;
     }
-    // 希望申请的新的brk的值
-    uintptr_t brk = *brk_store;
 
     if (brk < mm->brk_start) {
-        goto out;
+        goto out_unlock;
     }
     uintptr_t new_brk = ROUNDUP(brk, PAGE_SIZE);
     uintptr_t old_brk = mm->brk;
     assert(old_brk % PAGE_SIZE == 0);
     // 新申请的brk在之前申请的brk范围之内，并且有相同的上边界（按页对齐）
     if (new_brk == old_brk) {
-        goto out;
+        goto out_unlock;
     }
 
-    lock_mm(mm);
     if (new_brk < old_brk) {
         // 释放[new_brk, old_brk)这部分的vma
         if (mm_unmap(mm, new_brk, old_brk - new_brk) != 0) {
@@ -839,9 +869,9 @@ int do_brk(uintptr_t *brk_store) {
     mm->brk = new_brk;
 
 out_unlock:
-    unlock_mm(mm);
 out:
     *brk_store = mm->brk;
+    unlock_mm(mm);
     return 0;
 }
 
@@ -908,7 +938,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(skiplist_test);
+    KERNEL_EXECVE(thread_fork);
 #endif
     panic("user_main execve failed.\n");
 }
@@ -1108,6 +1138,47 @@ int do_shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {
 out_unlock:
     unlock_mm(mm);
     return ret;
+}
+
+static void inline print_process(Process *process, int level) {
+    int i;
+    for (i = 0; i < level; i++) {
+        printk("\t");
+    }
+    int ppid;
+    Process *parent = process->parent;
+    if (parent != NULL) {
+        ppid = parent->pid;
+    }
+    printk("pid: %d, s: %d, ppid = %d\n", process->pid, process->state, ppid);
+}
+
+static void process_tree(Process *process, int level) {
+    while (process != NULL) {
+        print_process(process, level);
+        process_tree(process->child, level + 1);
+        process = process->right_sibling;
+    }
+}
+
+void print_process_tree(void) {
+    if (init_process == NULL) {
+        printk("init_process does not exist\n");
+        return;
+    }
+    process_tree(init_process, 1);
+}
+
+void print_current_thread_group(void) {
+    if (current == NULL) {
+        return;
+    }
+    Process *process = current;
+    do {
+        printk("  pid:%d  ", process->pid);
+        process = next_thread(process);
+    } while (process != current);
+    printk("\n");
 }
 
 void cpu_idle(void) {

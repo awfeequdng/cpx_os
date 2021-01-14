@@ -88,10 +88,13 @@ void process_init(void);
 void process_run(Process *process);
 int kernel_thread(int (*fn)(void *), void *arg, uint32_t clone_flags);
 
+void print_process_tree(void);
+void print_current_thread_group(void);
+
 char *set_process_name(Process *process, const char *name);
 char *get_process_name(Process *process);
 void cpu_idle(void) __attribute__((noreturn));
-
+void may_killed(void);
 Process *find_process(int pid);
 int do_fork(uint32_t clone_flags, uintptr_t statck, struct TrapFrame *tf);
 int do_exit(int error_code);

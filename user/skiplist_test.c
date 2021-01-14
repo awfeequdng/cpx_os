@@ -58,5 +58,4 @@ int main(void) {
     skiplist_del(list);
 
     free(key);
-
 }
