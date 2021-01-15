@@ -14,7 +14,7 @@ ShareMemory *shmem_create(size_t len) {
         sh_mem->shmn_cache = NULL;
         sh_mem->len = len;
         shmem_ref_set(sh_mem, 0);
-        lock_init(&(sh_mem->lock));
+        sem_init(&(sh_mem->sem), 1);
     }
     return sh_mem;
 }

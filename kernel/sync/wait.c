@@ -98,3 +98,11 @@ void wakeup_queue(WaitQueue *queue, uint32_t wakeup_flags, bool del) {
         }
     }
 }
+
+void wait_current_set(WaitQueue *queue, Wait *wait, uint32_t wait_state) {
+    assert(current != NULL);
+    wait_init(wait, current);
+    current->state = STATE_SLEEPING;
+    current->wait_state = wait_state;
+    wait_queue_add(queue, wait);
+}

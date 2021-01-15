@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <schedule.h>
 #include <elf.h>
+#include <shmem.h>
 
 // 除了idle_process，其他所有进程都挂接在该链表下面
 ListEntry process_list;

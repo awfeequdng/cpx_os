@@ -1,0 +1,30 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/kernel/debug/",
+                "${workspaceFolder}/kernel/driver/",
+                "${workspaceFolder}/kernel/fs/",
+                "${workspaceFolder}/kernel/init/",
+                "${workspaceFolder}/kernel/lib/",
+                "${workspaceFolder}/kernel/mm/",
+                "${workspaceFolder}/kernel/process/",
+                "${workspaceFolder}/kernel/schedule/",
+                "${workspaceFolder}/kernel/sync/",
+                "${workspaceFolder}/kernel/syscall/",
+                "${workspaceFolder}/kernel/trap/",
+                "${workspaceFolder}/lib/",
+                "${workspaceFolder}/user/",
+                "${workspaceFolder}/user/libs"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang-8",
+            "cStandard": "c11",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}

@@ -28,7 +28,7 @@ MmStruct *mm_create(void) {
         mm->map_count = 0;
         mm->swap_address = 0;
         set_mm_count(mm, 0);
-        lock_init(&(mm->mm_lock));
+        sem_init(&(mm->mm_sem), 1);
         mm->brk_start = mm->brk = 0;
         list_init(&(mm->process_mm_link));
     }
@@ -886,7 +886,7 @@ void print_vma(void) {
 
 void lock_mm(MmStruct *mm) {
     if (mm != NULL) {
-        lock(&(mm->mm_lock));
+        down(&(mm->mm_sem));
         if (current != NULL) {
             mm->locked_by = current->pid;
         }
@@ -895,14 +895,14 @@ void lock_mm(MmStruct *mm) {
 
 void unlock_mm(MmStruct *mm) {
     if (mm != NULL) {
-        unlock(&(mm->mm_lock));
+        up(&(mm->mm_sem));
         mm->locked_by = 0;
     }
 }
 
 bool try_lock_mm(MmStruct *mm) {
     if (mm != NULL) {
-        if (!try_lock(&(mm->mm_lock))) {
+        if (!try_down(&(mm->mm_sem))) {
             return false;
         }
         if (current != NULL) {

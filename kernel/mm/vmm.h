@@ -6,10 +6,13 @@
 #include <memlayout.h>
 #include <sync.h>
 #include <rbtree.h>
-#include <shmem.h>
+// #include <shmem.h>
 #include <atomic.h>
+#include <semaphore.h>
 
 struct mm_struct;
+
+struct shmem_struct;
 
 typedef struct {
     struct mm_struct *vm_mm;
@@ -19,7 +22,7 @@ typedef struct {
     uint32_t vm_flags;
     rbtree_node_t rb_link;
     ListEntry vma_link;
-    ShareMemory *shmem;
+    struct shmem_struct *shmem;
     size_t shmem_off;
 } VmaStruct;
 
@@ -43,7 +46,7 @@ typedef struct mm_struct {
     int map_count;
     uintptr_t swap_address;
     atomic_t mm_count;
-    lock_t mm_lock;
+    Semaphore mm_sem;
     int locked_by;      // mm是被哪个进程锁住的
     uintptr_t brk_start;
     uintptr_t brk;
@@ -65,7 +68,7 @@ int mm_brk(MmStruct *mm, uintptr_t addr, size_t len);
 MmStruct *mm_create(void);
 void mm_destory(MmStruct *mm);
 int mm_map_shmem(MmStruct *mm, uintptr_t addr, uint32_t vm_flags,
-        ShareMemory *shmem, VmaStruct **vma_store);
+        struct shmem_struct *shmem, VmaStruct **vma_store);
 
 int mm_map(MmStruct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
          VmaStruct **vma_store);

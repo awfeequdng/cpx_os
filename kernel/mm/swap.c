@@ -14,7 +14,8 @@
 #include <process.h>
 #include <schedule.h>
 #include <wait.h>
-#include <sync.h>
+// #include <sync.h>
+#include <semaphore.h>
 
 size_t max_swap_offset;
 
@@ -51,7 +52,7 @@ static volatile bool swap_init_ok = false;
 
 static ListEntry hash_list[HASH_LIST_SIZE];
 
-static lock_t swap_in_lock;
+static Semaphore swap_in_sem;
 
 static volatile int pressure = 0;
 static WaitQueue kswapd_done;
@@ -108,7 +109,7 @@ void swap_init(void) {
     for (i = 0; i < HASH_LIST_SIZE; i++) {
         list_init(hash_list + i);
     }
-    lock_init(&swap_in_lock);
+    sem_init(&swap_in_sem, 1);
 
     check_swap();
     check_mm_swap();
@@ -355,7 +356,7 @@ int swap_in_page(swap_entry_t entry, struct Page **pagep) {
     }
 
     new_page = alloc_page();
-    lock(&swap_in_lock);
+    down(&swap_in_sem);
     // 查找到加锁的这段时间内，可能这个page又被放入hash_list了
     if ((page = swap_hash_find(entry)) != NULL) {
         if (new_page != NULL) {
@@ -380,14 +381,14 @@ int swap_in_page(swap_entry_t entry, struct Page **pagep) {
     // page刚刚才被访问，将其放入swap的active链表
     swap_active_list_add(page);
 found_unlock:
-    unlock(&swap_in_lock);
+    up(&swap_in_sem);
 
 found:
     *pagep = page;
     return 0;
 
 failed_unlock:
-    unlock(&swap_in_lock);
+    up(&swap_in_sem);
     return ret;
 }
 

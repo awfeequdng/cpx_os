@@ -49,7 +49,8 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/sync/wait.c \
 		kernel/schedule/schedule_FCFS.c \
 		kernel/schedule/schedule_RR.c \
-		kernel/schedule/schedule_MLFQ.c
+		kernel/schedule/schedule_MLFQ.c \
+		kernel/sync/semaphore.c
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \

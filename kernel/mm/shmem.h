@@ -4,7 +4,8 @@
 #include <types.h>
 #include <list.h>
 #include <memlayout.h>
-#include <sync.h>
+// #include <sync.h>
+#include <semaphore.h>
 
 typedef struct {
     uintptr_t start;
@@ -23,7 +24,7 @@ typedef struct shmem_struct {
     ShareMemNode *shmn_cache;
     size_t len;
     atomic_t ref;   // 该结构的引用计数
-    lock_t lock;    
+    Semaphore sem; 
 } ShareMemory;
 
 ShareMemory *shmem_create(size_t len);
@@ -49,11 +50,11 @@ static inline int shmem_ref_dec(ShareMemory *shmem) {
 }
 
 static inline void shmem_lock(ShareMemory *shmem) {
-    lock(&(shmem->lock));
+    down(&(shmem->sem));
 }
 
 static inline void shmem_unlock(ShareMemory *shmem) {
-    unlock(&(shmem->lock));
+    up(&(shmem->sem));
 }
 
 #endif // __KERNEL_MM_SHMEM_H__
