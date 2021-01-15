@@ -24,8 +24,8 @@ void __panic(const char *file, int line, const char *fmt, ...) {
     va_end(ap);
 
 panic_dead:
-    // cli();
-    sti();
+    cli();
+    // sti();
     while (1) {
         monitor(NULL);
     }

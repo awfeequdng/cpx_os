@@ -31,6 +31,7 @@ static void schedule_class_process_tick(Process *process) {
     if (process != idle_process) {
         schedule_class->process_tick(run_queue, process);
     } else {
+        // printk("process = %p rescheduled\n", process);
         process->need_resched = true;
     }
 }
@@ -51,6 +52,7 @@ void schedule_init(void) {
     
     schedule_class = get_MLFQ_schedule_class();
     // schedule_class = get_RR_schedule_class();
+    // schedule_class = get_FCFS_schedule_class();
     schedule_class->init(run_queue);
 
     printk("schedule class: %s\n", schedule_class->name);
@@ -81,8 +83,11 @@ void schedule(void) {
     local_intr_save(flag);
     {
         current->need_resched = false;
-        if (current->state == STATE_RUNNABLE) {
+        // idle process就不需要就行调度了
+        if (current->state == STATE_RUNNABLE && current != idle_process) {
             // 当前进程还可以继续被调度
+            // printk("current process pid = %d enqueue, name = %s, state = %08x, wait_state=%08x, res=%d\n",
+                // current->pid, current->name, current->state, current->wait_state, current->need_resched);
             schedule_class_enqueue(current);
         }
         if ((next = schedule_class_pick_next()) != NULL) {
@@ -91,6 +96,8 @@ void schedule(void) {
         if (next == NULL) {
             next = idle_process;
         }
+        // printk("next process pid = %d, name = %s, state = %08x, wait_state=%08x, res=%d\n",
+            // next->pid, next->name, next->state, next->wait_state, next->need_resched);
         next->runs++;
         if (next != current) {
             process_run(next);

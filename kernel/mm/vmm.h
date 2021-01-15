@@ -46,12 +46,13 @@ typedef struct mm_struct {
     int map_count;
     uintptr_t swap_address;
     atomic_t mm_count;
-    Semaphore mm_sem;
+    lock_t mm_lock;
     int locked_by;      // mm是被哪个进程锁住的
     uintptr_t brk_start;
     uintptr_t brk;
     // 进程挂接在kswapd管理的链表上
     ListEntry process_mm_link;
+    Semaphore mm_sem;
 } MmStruct;
 
 #define le2mm(le, member)   \

@@ -19,6 +19,7 @@ USER_SRC_FILES := user/libs/init_code.S \
 		user/libs/clone.S
 
 USER_BINS_SRC_FILES := \
+		user/sem_test.c \
 		user/matrix.c \
 		user/thread_fork.c \
 		user/skiplist_test.c \
@@ -84,6 +85,7 @@ $(USER_BINS): $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(USER_OBJ_BINS_FILES)
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)skiplist_test $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/skiplist_test.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)thread_fork $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/thread_fork.o
 	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)matrix $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/matrix.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)sem_test $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/sem_test.o
 
 # $(OBJ_DIR)/lib/%.o:
 

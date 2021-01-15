@@ -36,5 +36,9 @@ int mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
 int munmap(uintptr_t addr, size_t len);
 int shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
 int clone(uint32_t clone_flags, uintptr_t stack, int (*fn)(void *), void *arg);
+sem_t sem_init(int value);
+int sem_post(sem_t sem_id);
+int sem_wait(sem_t sem_id);
+int sem_get_value(sem_t sem_id, int *value_store);
 
 #endif // __USER_LIBS_ULIB_H__

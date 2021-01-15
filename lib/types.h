@@ -34,6 +34,8 @@ typedef uint32_t pte_t;
 typedef uint32_t pde_t;
 typedef pte_t swap_entry_t;
 
+typedef uintptr_t sem_t;
+
 #define MIN(_a, _b) 	\
 ({			\
  	typeof(_a) __a = (_a);	\

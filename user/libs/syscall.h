@@ -17,5 +17,8 @@ int sys_page_dir(void);
 int sys_mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
 int sys_munmap(uintptr_t addr, size_t len);
 int sys_shmem(uintptr_t *addr_store, size_t len, uint32_t mmap_flags);
-
+sem_t sys_sem_init(int value);
+int sys_sem_post(sem_t sem_id);
+int sys_sem_wait(sem_t sem_id);
+int sys_sem_get_value(sem_t sem_id, int *value_store);
 #endif // __USER_LIBS_SYSCALL_H__

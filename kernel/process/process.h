@@ -9,6 +9,7 @@
 #include <trap.h>
 
 #include <swap.h>
+#include <semaphore.h>
 
 enum ProcessState {
     STATE_UNINIT = 0,
@@ -68,6 +69,7 @@ typedef struct process_struct {
     struct run_queue *rq;       
     ListEntry run_link;         // 该链表将进程链接进进程调度的队列
     int time_slice;             // 进程占用CPU的时间片
+    SemaphoreQueue *sem_queue;  // 进程等待的用户态信号量
 } Process;
 
 #define PF_EXITING                  0x00000001  // getting shutdown
@@ -75,7 +77,8 @@ typedef struct process_struct {
 #define WT_CHILD                    (0x00000001 | WT_INTERRUPTED)   // wait child
 #define WT_TIMER                    (0x00000002 | WT_INTERRUPTED)   // wait timer
 #define WT_KSWAPD                    0x00000004                     // wait kswapd to free page
-#define WT_KSEM                      0x00000100     // 等待信号量
+#define WT_KSEM                      0x00000100                     // 等待内核态信号量
+#define WT_USEM                      (0x0000101 | WT_INTERRUPTED)   // 等待用户态信号量
 #define WT_INTERRUPTED               0x80000000
 
 #define le2process(le, member)      \

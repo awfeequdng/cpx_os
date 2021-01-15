@@ -65,6 +65,7 @@ static Process *alloc_process(void) {
         process->rq = NULL;
         list_init(&(process->run_link));
         process->time_slice = 0;
+        process->sem_queue = NULL;
     }
     return process;
 }
@@ -224,6 +225,57 @@ static Process *next_thread(Process *process) {
     return le2process(list_next(&(process->thread_group)), thread_group);
 }
 
+static int copy_sem(uint32_t clone_flags, Process *process) {
+    SemaphoreQueue *sem_queue = NULL;
+    SemaphoreQueue *old_sem_queue = current->sem_queue;
+
+    if (old_sem_queue == NULL) {
+        // 内核线程没有信号量队列
+        return 0;
+    }
+
+    if (clone_flags & CLONE_SEM) {
+        sem_queue = old_sem_queue;
+        goto good_sem_queue;
+    }
+
+    int ret = -E_NO_MEM;
+    if ((sem_queue = sem_queue_create()) == NULL) {
+        goto bad_sem_queue;
+    }
+
+    down(&(old_sem_queue->sem));
+    ret = dup_sem_queue(sem_queue, old_sem_queue);
+    up(&(old_sem_queue->sem));
+    
+    if (ret != 0) {
+        goto bad_dup_cleanup_sem;
+    }
+
+good_sem_queue:
+    sem_queue_ref_inc(sem_queue);
+    process->sem_queue = sem_queue;
+    return 0;
+
+bad_dup_cleanup_sem:
+    exit_sem_queue(sem_queue);
+    sem_queue_destory(sem_queue);
+bad_sem_queue:
+    return ret;
+}
+
+static void put_sem_queue(Process *process) {
+    SemaphoreQueue *sem_queue = process->sem_queue;
+    if (sem_queue != NULL) {
+        if (sem_queue_ref_dec(sem_queue) == 0) {
+            exit_sem_queue(sem_queue);
+            sem_queue_destory(sem_queue);
+            process->sem_queue = NULL;
+        }
+    }
+}
+
+
 // 根据clone_flags标志是否复制或者共享当前的进程'current'
 static int copy_mm(uint32_t clone_flags, Process *process) {
     MmStruct *mm= NULL;
@@ -349,8 +401,11 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
     if (setup_kstack(process) != 0) {
         goto bad_fork_cleanup_process;
     }
-    if (copy_mm(clone_flags, process) != 0) {
+    if (copy_sem(clone_flags, process) != 0) {
         goto bad_fork_cleanup_kstack;
+    }
+    if (copy_mm(clone_flags, process) != 0) {
+        goto bad_fork_cleanup_sem;
     }
     copy_thread(process, stack, tf);
 
@@ -373,7 +428,8 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
 
 fork_out:
     return ret;
-
+bad_fork_cleanup_sem:
+    put_sem_queue(process);
 bad_fork_cleanup_kstack:
     put_kstack(process);
 bad_fork_cleanup_process:
@@ -422,6 +478,8 @@ int __do_exit() {
         }
         current->mm = NULL;
     }
+    // 释放信号量
+    put_sem_queue(current);
     current->state = STATE_ZOMBIE;
 
     bool flag;
@@ -704,8 +762,16 @@ int do_execve(const char *name, size_t len, unsigned char *binary, size_t size) 
         }
         current->mm = NULL;
     }
+    // 将当前的信号量释放掉
+    put_sem_queue(current);
 
-    int ret;
+    int ret = -E_NO_MEM;
+    // 创建一个新的信号量
+    if ((current->sem_queue = sem_queue_create()) == NULL) {
+        goto execve_exit;
+    }
+    sem_queue_ref_inc(current->sem_queue);
+
     // 加载新的进程地址空间到current
     if ((ret = load_icode(binary, size)) != 0) {
         goto execve_exit;
@@ -940,11 +1006,10 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(matrix);
+    KERNEL_EXECVE(sem_test);
 #endif
     panic("user_main execve failed.\n");
 }
-
 
 // init_process内核线程： 该线程用于创建kswap_main & user_main等内核线程
 static int init_main(void *arg) {
@@ -953,6 +1018,7 @@ static int init_main(void *arg) {
         panic("kswapd init failed.\n");
     }
     kswapd = find_process(pid);
+    printk("kswapd pid = %d\n", kswapd->pid);
     set_process_name(kswapd, "kswapd");
 
     size_t nr_free_pages_store = nr_free_pages();

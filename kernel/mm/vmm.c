@@ -28,9 +28,10 @@ MmStruct *mm_create(void) {
         mm->map_count = 0;
         mm->swap_address = 0;
         set_mm_count(mm, 0);
-        sem_init(&(mm->mm_sem), 1);
+        lock_init(&(mm->mm_lock));
         mm->brk_start = mm->brk = 0;
         list_init(&(mm->process_mm_link));
+        sem_init(&(mm->mm_sem), 1);
     }
 
     return mm;
@@ -688,7 +689,16 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
         panic("page fault in kernel thread: pid = %d, %d %08x.\n",
             current->pid, error_code, addr);
     }
-    lock_mm(mm);
+    bool need_unlock = true;
+    if (!try_lock_mm(mm)) {
+        if (current != NULL && mm->locked_by == current->pid) {
+            // 如果mm是被当前进程锁住的话，则在失败时可以不释放锁，并且这次也可以不加锁，从而实现重入
+            need_unlock = false;
+        } else {
+            lock_mm(mm);
+        }
+    }
+
     int ret = -E_INVAL;
 
     VmaStruct *vma = find_vma(mm, addr);
@@ -859,7 +869,9 @@ int do_page_fault(MmStruct *mm, uint32_t error_code, uintptr_t addr) {
     ret = 0;
 
 failed:
-    unlock_mm(mm);
+    if (need_unlock) {
+        unlock_mm(mm);
+    }
     return ret;
 }
 
@@ -886,7 +898,8 @@ void print_vma(void) {
 
 void lock_mm(MmStruct *mm) {
     if (mm != NULL) {
-        down(&(mm->mm_sem));
+        // down(&(mm->mm_sem));
+        lock(&(mm->mm_lock));
         if (current != NULL) {
             mm->locked_by = current->pid;
         }
@@ -895,14 +908,16 @@ void lock_mm(MmStruct *mm) {
 
 void unlock_mm(MmStruct *mm) {
     if (mm != NULL) {
-        up(&(mm->mm_sem));
+        // up(&(mm->mm_sem));
+        unlock(&(mm->mm_lock));
         mm->locked_by = 0;
     }
 }
 
 bool try_lock_mm(MmStruct *mm) {
     if (mm != NULL) {
-        if (!try_down(&(mm->mm_sem))) {
+        // if (!try_down(&(mm->mm_sem))) {
+        if (!try_lock(&(mm->mm_lock))) {
             return false;
         }
         if (current != NULL) {
