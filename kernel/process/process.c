@@ -66,6 +66,7 @@ static Process *alloc_process(void) {
         list_init(&(process->run_link));
         process->time_slice = 0;
         process->sem_queue = NULL;
+        process->fs_struct = NULL;
     }
     return process;
 }

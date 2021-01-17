@@ -23,5 +23,6 @@ void *	memfind(const void *s, int c, size_t len);
 
 long	strtol(const char *s, char **endptr, int base);
 
+char *strdup(const char *src);
 
 #endif // __INCLUDE_STRING_H__

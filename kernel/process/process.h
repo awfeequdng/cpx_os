@@ -46,6 +46,8 @@ struct mm_struct;
 
 struct run_queue;
 
+struct fs_struct;
+
 typedef struct process_struct {
     enum ProcessState state;
     int pid;
@@ -70,6 +72,7 @@ typedef struct process_struct {
     ListEntry run_link;         // 该链表将进程链接进进程调度的队列
     int time_slice;             // 进程占用CPU的时间片
     SemaphoreQueue *sem_queue;  // 进程等待的用户态信号量
+    struct fs_struct *fs_struct;
 } Process;
 
 #define PF_EXITING                  0x00000001  // getting shutdown

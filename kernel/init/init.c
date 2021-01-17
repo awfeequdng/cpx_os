@@ -14,6 +14,7 @@
 #include <swap.h>
 #include <process.h>
 #include <schedule.h>
+#include <fs.h>
 
 void printk_test(void)
 {
@@ -86,6 +87,8 @@ void start_kernel(void)
 
 	ide_init();
 	swap_init();
+
+	fs_init();
 
 	clock_init();
 	// 开启总中断

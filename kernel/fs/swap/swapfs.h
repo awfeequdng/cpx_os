@@ -1,5 +1,5 @@
-#ifndef __KERNEL_FS_SWAPFS_H__
-#define __KERNEL_FS_SWAPFS_H__
+#ifndef __KERNEL_FS_SWAP_SWAPFS_H__
+#define __KERNEL_FS_SWAP_SWAPFS_H__
 
 #include <swap.h>
 

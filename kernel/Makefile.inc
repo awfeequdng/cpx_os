@@ -12,9 +12,12 @@ KERNEL_INC += kernel/driver \
 			  kernel/lib \
 			  kernel/sync \
 			  kernel/fs \
+			  kernel/fs/swap \
 			  kernel/process \
 			  kernel/schedule \
-			  kernel/syscall
+			  kernel/syscall \
+			  kernel/fs/vfs \
+			  kernel/fs/devs \
 
 KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/trap/trap.c \
@@ -37,8 +40,9 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/mm/slab.c \
 		kernel/mm/vmm.c \
 		kernel/lib/rbtree.c \
+		kernel/lib/string.c \
 		kernel/driver/ide.c \
-		kernel/fs/swapfs.c \
+		kernel/fs/swap/swapfs.c \
 		kernel/mm/swap.c \
 		kernel/mm/shmem.c \
 		kernel/process/process.c \
@@ -50,7 +54,21 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/schedule/schedule_FCFS.c \
 		kernel/schedule/schedule_RR.c \
 		kernel/schedule/schedule_MLFQ.c \
-		kernel/sync/semaphore.c
+		kernel/sync/semaphore.c \
+		kernel/fs/file.c \
+		kernel/fs/fs.c \
+		kernel/fs/iobuf.c \
+		kernel/fs/vfs/inode.c \
+		kernel/fs/vfs/vfs.c \
+		kernel/fs/devs/dev.c \
+		kernel/fs/devs/dev_null.c \
+		kernel/fs/devs/dev_stdin.c \
+		kernel/fs/devs/dev_stdout.c \
+		kernel/fs/vfs/vfsdev.c \
+		kernel/fs/vfs/vfsfile.c \
+		kernel/fs/vfs/vfslookup.c \
+		kernel/fs/vfs/vfspath.c
+
 
 
 KERNEL_LIB_SRC_FILES = lib/string.c \
