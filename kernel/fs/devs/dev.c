@@ -112,7 +112,9 @@ static const InodeOperations dev_node_ops = {
     } while (0)
 
 void dev_init(void) {
-
+    init_device(null);
+    init_device(stdin);
+    init_device(stdout);
 }
 
 Inode *dev_create_inode(void) {

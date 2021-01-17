@@ -79,9 +79,11 @@ typedef struct process_struct {
 
 #define WT_CHILD                    (0x00000001 | WT_INTERRUPTED)   // wait child
 #define WT_TIMER                    (0x00000002 | WT_INTERRUPTED)   // wait timer
-#define WT_KSWAPD                    0x00000004                     // wait kswapd to free page
+#define WT_KSWAPD                    0x00000003                     // wait kswapd to free page
+#define WT_KBD                      (0X00000004 | WT_INTERRUPTED)
 #define WT_KSEM                      0x00000100                     // 等待内核态信号量
-#define WT_USEM                      (0x0000101 | WT_INTERRUPTED)   // 等待用户态信号量
+#define WT_USEM                     (0x00000101 | WT_INTERRUPTED)   // 等待用户态信号量
+                     
 #define WT_INTERRUPTED               0x80000000
 
 #define le2process(le, member)      \
