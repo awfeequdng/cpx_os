@@ -8,6 +8,7 @@
 #include <file.h>
 #include <unistd.h>
 #include <vfs.h>
+#include <dirent.h>
 
 #define testfd(fd)      ((fd) >= 0 && (fd) < FS_STRUCT_NENTRY)
 
@@ -267,4 +268,67 @@ int file_dup(int fd1, int fd2) {
     }
     filemap_dup(file2, file1);
     return file2->fd;
+}
+
+int file_seek(int fd, off_t pos, int whence) {
+    Stat __stat;
+    Stat *stat = &__stat;
+    int ret;
+    File *file = NULL;
+    if ((ret = fd2file(fd, &file)) != 0) {
+        return ret;
+    }
+    filemap_acquire(file);
+
+    switch (whence)
+    {
+    case LSEEK_SET:
+        break;
+    case LSEEK_CUR:
+        pos += file->pos;
+        break;
+    case LSEEK_END:
+        if ((ret = vop_fstat(file->node, stat)) == 0) {
+            pos += stat->st_size;
+        }
+        break;
+    default:
+        ret = -E_INVAL;
+    }
+
+    if (ret == 0) {
+        if ((ret = vop_tryseek(file->node, pos)) == 0) {
+            file->pos = pos;
+        }
+    }
+    filemap_release(file);
+    return ret;
+}
+
+int file_fsync(int fd) {
+    int ret;
+    File *file = NULL;
+    if ((ret = fd2file(fd, &file)) != 0) {
+        return ret;
+    }
+    filemap_acquire(file);
+    ret = vop_fsync(file->node);
+    filemap_release(file);
+    return ret;
+}
+
+int file_get_dirent(int fd, DirectoryEntry *direntp) {
+    int ret;
+    File *file = NULL;
+    if ((ret = fd2file(fd, &file)) != 0) {
+        return ret;
+    }
+    filemap_acquire(file);
+    IOBuf __iob;
+    IOBuf *iob = iobuf_init(&__iob, direntp->name, sizeof(direntp->name), direntp->offset);
+    if ((ret = vop_getdirentry(file->node, iob)) == 0) {
+        direntp->offset += iobuf_used(iob);
+    }
+    filemap_release(file);
+    return ret;
 }

@@ -185,7 +185,7 @@ static int sfs_block_get_indirect_nolock(SfsFs *sfs, uint32_t *indirect_blkno, u
     }
     // 将新申请的数据块blkno索引号写入indirect的offset处
     if ((ret = sfs_wbuf(sfs, &blkno, sizeof(uint32_t), indirect, offset)) != 0) {
-        sfs_block_free(sfs, &blkno);
+        sfs_block_free(sfs, blkno);
         goto failed_cleanup;
     }
 

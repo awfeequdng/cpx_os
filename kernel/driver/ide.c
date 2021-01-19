@@ -6,7 +6,7 @@
 #include <trap.h>
 #include <fs.h>
 #include <x86.h>
-
+#include <semaphore.h>
 
 #define ISA_DATA                0x00
 #define ISA_ERROR               0x01
@@ -51,14 +51,22 @@
 #define VALID_IDE(ideno)        (((ideno) >= 0) && ((ideno) < MAX_IDE) && (ide_devices[ideno].valid))
 
 
-static const struct {
+static struct {
     unsigned short base;        // I/O Base
     unsigned short ctrl;        // Control Base
+    Semaphore sem;
 } channels[2] = {
     {IO_BASE0, IO_CTRL0},
     {IO_BASE1, IO_CTRL1},
 };
 
+static void lock_channel(unsigned short ide_no) {
+    down(&(channels[ide_no >> 1].sem));
+}
+
+static void unlock_channel(unsigned short ide_no) {
+    up(&(channels[ide_no >> 1].sem));
+}
 
 #define IO_BASE(ideno)          (channels[(ideno) >> 1].base)
 #define IO_CTRL(ideno)          (channels[(ideno) >> 1].ctrl)
@@ -150,6 +158,9 @@ ide_init(void) {
     // enable ide interrupt
     pic_enable(IRQ_IDE1);
     pic_enable(IRQ_IDE2);
+
+    sem_init(&(channels[0].sem), 1);
+    sem_init(&(channels[1].sem), 1);
 }
 
 bool ide_device_valid(unsigned short ideno) {
@@ -167,6 +178,8 @@ int ide_read_secs(unsigned short ideno, uint32_t secno, void *dst, size_t nsecs)
     assert(nsecs <= MAX_NSECS && VALID_IDE(ideno));
     assert(secno < MAX_DISK_NSECS && secno + nsecs <= MAX_DISK_NSECS);
     unsigned short iobase = IO_BASE(ideno), ioctrl = IO_CTRL(ideno);
+
+    lock_channel(ideno);
 
     ide_wait_ready(iobase, 0);
 
@@ -188,6 +201,7 @@ int ide_read_secs(unsigned short ideno, uint32_t secno, void *dst, size_t nsecs)
     }
 
 out:
+    unlock_channel(ideno);
     return ret;
 }
 
@@ -196,6 +210,8 @@ int ide_write_secs(unsigned short ideno, uint32_t secno, const void *src, size_t
     assert(nsecs <= MAX_NSECS && VALID_IDE(ideno));
     assert(secno < MAX_DISK_NSECS && secno + nsecs <= MAX_DISK_NSECS);
     unsigned short iobase = IO_BASE(ideno), ioctrl = IO_CTRL(ideno);
+
+    lock_channel(ideno);
 
     ide_wait_ready(iobase, 0);
 
@@ -217,5 +233,6 @@ int ide_write_secs(unsigned short ideno, uint32_t secno, const void *src, size_t
     }
 
 out:
+    unlock_channel(ideno);
     return ret;
 }

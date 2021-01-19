@@ -9,6 +9,7 @@
 #include <stat.h>
 
 struct inode;
+struct dirent;
 
 typedef struct file {
     enum {
@@ -34,6 +35,10 @@ int file_read(int fd, void *base, size_t len, size_t *copied_store);
 int file_write(int fd, void *base, size_t len, size_t *copied_store);
 int file_fstat(int fd, Stat *stat);
 int file_dup(int fd1, int fd2);
+int file_seek(int fd, off_t pos, int whence);
+int file_fsync(int fd);
+int file_get_dirent(int fd, struct dirent *direntp);
+
 
 static inline int fopen_count(File *file) {
     return atomic_read(&(file->open_count));
