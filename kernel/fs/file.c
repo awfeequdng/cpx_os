@@ -7,6 +7,7 @@
 #include <process.h>
 #include <file.h>
 #include <unistd.h>
+#include <vfs.h>
 
 #define testfd(fd)      ((fd) >= 0 && (fd) < FS_STRUCT_NENTRY)
 
@@ -60,8 +61,7 @@ static void filemap_free(File *file) {
     assert(file->status == FD_INIT || file->status == FD_CLOSED);
     assert(fopen_count(file) == 0);
     if (file->status == FD_CLOSED) {
-        // todo: vfs_close
-        // vfs_close(file->node);
+        vfs_close(file->node);
     }
     file->status = FD_NONE;
 }
@@ -154,8 +154,31 @@ int file_open(char *path, uint32_t open_flags) {
     }
     int ret;
     File *file = NULL;
+    if ((ret = filemap_alloc(NO_FD, &file)) != 0) {
+        return ret;
+    }
 
-    // todo:
+    Inode *node = NULL;
+    if ((ret = vfs_open(path, open_flags, &node)) != 0) {
+        filemap_free(file);
+        return ret;
+    }
+
+    file->pos = 0;
+    if (open_flags & O_APPEND) {
+        Stat __stat, *stat = &__stat;
+        if ((ret = vop_fstat(node, stat)) != 0) {
+            vfs_close(node);
+            filemap_free(file);
+            return ret;
+        }
+        file->pos = stat->st_size;
+    }
+    file->node = node;
+    file->writable = writable;
+    file->readable = readable;
+    filemap_open(file);
+    return file->fd;
 }
 
 int file_close(int fd) {

@@ -71,6 +71,7 @@ int vfs_sync(void) {
         }
         unlock_vdev_list();
     }
+    return 0;
 }
 
 int vfs_get_root(const char *dev_name, Inode **node_store) {

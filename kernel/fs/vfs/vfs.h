@@ -3,6 +3,7 @@
 
 #include <types.h>
 #include <fs.h>
+#include <sfs.h>
 
 struct inode;
 struct device;
@@ -10,13 +11,36 @@ struct iobuf;
 
 typedef struct fs {
     union {
-        // to add:
+        SfsFs __sfs_info;
     } fs_info;
+    enum {
+        fs_type_sfs_info = 0x5679,
+    } fs_type;
     int (*fs_sync)(struct fs *fs);
     struct inode *(*fs_get_root)(struct fs *fs);
     int (*fs_unmount)(struct fs *fs);
     void (*fs_cleanup)(struct fs *fs);
 } Fs;
+
+#define __fs_type(type)             fs_type_##type##_info
+
+#define check_fs_type(fs, type)     ((fs)->fs_type == __fs_type(type))
+
+#define __fsop_info(_fs, type)      \
+    ({                              \
+        Fs *__fs = (_fs);             \
+        assert(__fs != NULL && check_fs_type(__fs, type));    \
+        &(__fs->fs_info.__##type##_info);       \
+    })
+
+#define fsop_info(fs, type)     __fsop_info(fs, type)
+
+#define info2fs(info, type)     \
+    container_of((info), Fs, fs_info.__##type##_info)
+
+Fs *__alloc_fs(int type);
+
+#define alloc_fs(type)          __alloc_fs(__fs_type(type))
 
 #define fsop_sync(fs)          ((fs)->fs_sync(fs))
 #define fsop_get_root(fs)      ((fs)->fs_get_root(fs))
@@ -25,7 +49,7 @@ typedef struct fs {
 
 void vfs_init(void);
 void vfs_cleanup(void);
-void vfs_devlist_init(void);
+void vfs_dev_list_init(void);
 
 // vfs 底层操作，直接操作inode
 int vfs_set_current_dir(struct inode *dir);

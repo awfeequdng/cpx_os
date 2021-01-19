@@ -40,7 +40,6 @@ static int dev_stdin_read(char *buf, size_t len) {
     bool flag;
     local_intr_save(flag);
     {
-        uintptr_t data;
         for (; ret < len; ret++) {
         try_again:
             if (!queue_empty(que)) {
@@ -100,7 +99,7 @@ static void stdin_device_init(Device *dev) {
     dev->d_io = stdin_io;
     dev->d_ioctl = stdin_ioctl;
 
-    queue_init(que, &stdin_buffer, ARRAY_SIZE(stdin_buffer));
+    queue_init(que, stdin_buffer, ARRAY_SIZE(stdin_buffer));
     wait_queue_init(wait_queue);
 }
 

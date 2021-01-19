@@ -6,7 +6,7 @@
 #include <assert.h>
 #include <inode.h>
 
-static null_open(Device *dev, uint32_t open_flags) {
+static int null_open(Device *dev, uint32_t open_flags) {
     return 0;
 }
 
@@ -21,7 +21,7 @@ static int null_io(Device *dev, IOBuf *iob, bool write) {
     return 0;
 }
 
-static void null_ioctl(Device *dev, int op, void *data) {
+static int null_ioctl(Device *dev, int op, void *data) {
     return -E_INVAL;
 }
 

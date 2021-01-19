@@ -18,6 +18,7 @@ KERNEL_INC += kernel/driver \
 			  kernel/syscall \
 			  kernel/fs/vfs \
 			  kernel/fs/devs \
+			  kernel/fs/sfs
 
 KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/trap/trap.c \
@@ -64,10 +65,17 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/fs/devs/dev_null.c \
 		kernel/fs/devs/dev_stdin.c \
 		kernel/fs/devs/dev_stdout.c \
+		kernel/fs/devs/dev_disk0.c \
 		kernel/fs/vfs/vfsdev.c \
 		kernel/fs/vfs/vfsfile.c \
 		kernel/fs/vfs/vfslookup.c \
-		kernel/fs/vfs/vfspath.c
+		kernel/fs/vfs/vfspath.c \
+		kernel/fs/sfs/bitmap.c \
+		kernel/fs/sfs/sfs.c \
+		kernel/fs/sfs/sfs_fs.c \
+		kernel/fs/sfs/sfs_inode.c \
+		kernel/fs/sfs/sfs_io.c \
+		kernel/fs/sfs/sfs_lock.c
 
 
 

@@ -938,7 +938,6 @@ int do_brk(uintptr_t *brk_store) {
     mm->brk = new_brk;
 
 out_unlock:
-out:
     *brk_store = mm->brk;
     unlock_mm(mm);
     return 0;

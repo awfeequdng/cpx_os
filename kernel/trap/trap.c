@@ -16,9 +16,6 @@
 
 #define TICK		30
 
-static void print_hz() {
-	
-}
 
 static struct GateDescriptor idt[256] = {{0}};
 

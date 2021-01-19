@@ -10,6 +10,7 @@
 void fs_init(void) {
     vfs_init();
     dev_init();
+    sfs_init();
 }
 
 void fs_cleanup(void) {

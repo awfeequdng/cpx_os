@@ -4,11 +4,18 @@
 #include <inode.h>
 #include <semaphore.h>
 #include <error.h>
+#include <slab.h>
 
 static Semaphore bootfs_sem;
 static Inode *bootfs_node = NULL;
 
-extern void vfs_dev_list_init(void);
+Fs *__alloc_fs(int type) {
+    Fs *fs = NULL;
+    if ((fs = kmalloc(sizeof(Fs))) != NULL) {
+        fs->fs_type = type;
+    }
+    return fs;
+}
 
 void vfs_init(void) {
     sem_init(&bootfs_sem, 1);

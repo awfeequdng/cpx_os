@@ -9,6 +9,8 @@ typedef int bool;
 
 enum { false, true };
 
+#define BYTE_BITS		8
+
 typedef signed char int8_t;
 typedef unsigned char uint8_t;
 typedef short int16_t;
@@ -60,6 +62,12 @@ typedef uintptr_t sem_t;
 ({			\
  	uint32_t __n = (uint32_t)(n);	\
  	(typeof(a)) (ROUNDDOWN((uint32_t)(a) + __n - 1, __n));	\
+})
+
+#define ROUNDUP_DIV(a, n)	\
+({			\
+ 	uint32_t __n = (uint32_t)(n);	\
+ 	(typeof(a)) (((a) + __n - 1) / __n);	\
 })
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))

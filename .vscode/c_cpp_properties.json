@@ -7,6 +7,7 @@
                 "${workspaceFolder}/kernel/debug/",
                 "${workspaceFolder}/kernel/driver/",
                 "${workspaceFolder}/kernel/fs/",
+                "${workspaceFolder}/kernel/fs/sfs",
                 "${workspaceFolder}/kernel/fs/devs/",
                 "${workspaceFolder}/kernel/fs/vfs/",
                 "${workspaceFolder}/kernel/fs/swap/",

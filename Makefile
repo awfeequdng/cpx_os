@@ -73,9 +73,20 @@ IMAGES_TMP = $(IMAGES)~
 KERNEL = $(OBJ_DIR)/kernel/kernel
 BOOT = $(OBJ_DIR)/boot/boot
 SWAPIMG = $(OBJ_DIR)/swap.img
+FSIMG = $(OBJ_DIR)/fs.img
+SFSROOT := disk0
 
 all: build
 # all: $(IMAGES) $(SWAPIMG)
+
+
+$(OBJ_DIR)/mksfs: $(TOOLS_DIR)/mksfs.c
+	$(CC) -o $@ $<
+
+$(FSIMG): $(OBJ_DIR)/mksfs
+	@echo + mk $@
+	$(V)dd if=/dev/zero of=$@ bs=1M count=128
+	$(V)$(OBJ_DIR)/mksfs $@ $(SFSROOT)
 
 $(IMAGES): $(KERNEL) $(BOOT)
 	@echo + mk $@
@@ -91,13 +102,14 @@ include user/Makefile.inc
 include boot/Makefile.inc
 include kernel/Makefile.inc
 
-build: $(USER_BINS) $(IMAGES) $(SWAPIMG)
+build: $(USER_BINS) $(IMAGES) $(SWAPIMG) $(FSIMG)
 
 GDB_PORT = $(shell expr `id -u` % 5000 + 25000)
 
 # QEMUOPTS = -S -s -hda ./$(IMAGES) -monitor stdio 
 QEMUOPTS = -m 64m -drive file=$(IMAGES),index=0,media=disk,format=raw -serial mon:stdio -gdb tcp::$(GDB_PORT)
 QEMUOPTS += -drive file=$(SWAPIMG),index=1,media=disk,format=raw,cache=writeback
+QEMUOPTS += -drive file=$(FSIMG),index=2,media=disk,format=raw,cache=writeback
 # QEMUOPTS = -drive file=$(IMAGES),index=0,media=disk,format=raw -gdb tcp::$(GDB_PORT)
 
 .gdbinit: .gdbinit.tmp
