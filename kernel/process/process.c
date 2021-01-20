@@ -1059,7 +1059,7 @@ static int user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(hello2);
+    KERNEL_EXECVE(sfs_file_test1);
 #endif
     panic("user_main execve failed.\n");
 }

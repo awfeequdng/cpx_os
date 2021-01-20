@@ -212,3 +212,41 @@ failed_cleanup_fs:
 int sfs_mount(const char *dev_name) {
     return vfs_mount(dev_name, sfs_do_mount);
 }
+
+#include <process.h>
+void sfs_print_bitmap(void) {
+    FsStruct *fs_struct = current->fs_struct;
+        printk("fs_struct = %p\n", fs_struct);
+    if (fs_struct == NULL || fs_count(fs_struct) == 0) {
+        return;
+    }
+    Fs *fs = NULL;
+    if (fs_struct->pwd != NULL) {
+        fs = fs_struct->pwd->in_fs;
+    } else {
+        Inode *node_store = NULL;
+        if (vfs_get_bootfs(&node_store) != 0) {
+            printk("node_store = NULL\n");
+            return;
+        }
+        fs = node_store->in_fs;
+    }
+    
+    if (check_fs_type(fs, sfs)) {
+        printk("sfs\n");
+        SfsFs * sfs_fs = fsop_info(fs, sfs);
+        if (sfs_fs->freemap == NULL) {
+            return;
+        }
+        int i;
+        int n = sfs_fs->freemap->nwords;
+        printk("n = %d\n", n);
+        for (i = 0; i < n; i++) {
+            if (i % 8 == 0) {
+                printk("\n");
+            }
+            printk("%08x ", sfs_fs->freemap->map[i]);
+        }
+        printk("\n");
+    }
+}

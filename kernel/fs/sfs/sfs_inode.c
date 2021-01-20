@@ -176,7 +176,7 @@ static int sfs_block_get_indirect_nolock(SfsFs *sfs, uint32_t *indirect_blkno, u
             goto out;
         }
         // 位indirect分配索引号
-        if ((ret = sfs_block_alloc(sfs, &blkno)) != 0) {
+        if ((ret = sfs_block_alloc(sfs, &indirect)) != 0) {
             return ret;
         }
     }

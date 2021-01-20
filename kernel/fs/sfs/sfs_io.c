@@ -27,7 +27,7 @@ static int sfs_rwblock(SfsFs *sfs, void *buf, uint32_t blkno, uint32_t nblks, bo
             buf += SFS_BLK_SIZE;
         }
     }
-    lock_sfs_io(sfs);
+    unlock_sfs_io(sfs);
     return ret;
 }
 

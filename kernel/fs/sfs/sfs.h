@@ -124,6 +124,8 @@ struct inode;
 void sfs_init(void);
 int sfs_mount(const char *dev_name);
 
+void sfs_print_bitmap(void);
+
 void lock_sfs_fs(SfsFs *sfs);
 void lock_sfs_io(SfsFs *sfs);
 void lock_sfs_mutex(SfsFs *sfs);

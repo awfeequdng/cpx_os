@@ -70,16 +70,13 @@ void random_test(int fd, int pages) {
 }
 
 int main(void) {
-    printf("sfs file test: 1\n");
     int fd1 = safe_open("/test/testfile", O_RDWR | O_TRUNC);
     struct stat *stat = safe_fstat(fd1);
     assert(stat->st_size == 0 && stat->st_blocks == 0);
-    printf("sfs file test: 2, fd1 = %d\n", fd1);
 
     const int npages = 128;
     init_data(fd1, npages);
     printf("init_data ok.\n");
-    printf("sfs file test: 3\n");
 
     int fd2 = safe_dup(fd1);
     stat = safe_fstat(fd2);
