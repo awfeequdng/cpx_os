@@ -12,6 +12,7 @@
 #include <schedule.h>
 #include <elf.h>
 #include <shmem.h>
+#include <vfs.h>
 
 // 除了idle_process，其他所有进程都挂接在该链表下面
 ListEntry process_list;
@@ -276,6 +277,45 @@ static void put_sem_queue(Process *process) {
     }
 }
 
+static int copy_fs(uint32_t clone_flags, Process *process) {
+    FsStruct *fs_struct = NULL;
+    FsStruct *old_fs_struct = current->fs_struct;
+    assert(old_fs_struct != NULL);
+
+    if (clone_flags & CLONE_FS) {
+        fs_struct = old_fs_struct;
+        goto good_fs_struct;
+    }
+    
+    int ret = -E_NO_MEM;
+    if ((fs_struct = fs_create()) == NULL) {
+        goto bad_fs_struct;
+    }
+
+    if ((ret = dup_fs(fs_struct, old_fs_struct)) != 0) {
+        goto bad_dup_cleanup_fs;
+    }
+
+good_fs_struct:
+    fs_count_inc(fs_struct);
+    process->fs_struct = fs_struct;
+    return 0;
+
+bad_dup_cleanup_fs:
+    fs_destory(fs_struct);
+bad_fs_struct:
+    return ret;
+}
+
+static void put_fs(Process *process) {
+    FsStruct *fs_struct = process->fs_struct;
+    if (fs_struct != NULL) {
+        if (fs_count_dec(fs_struct) == 0) {
+            fs_destory(fs_struct);
+        }
+    }
+    process->fs_struct = NULL;
+}
 
 // 根据clone_flags标志是否复制或者共享当前的进程'current'
 static int copy_mm(uint32_t clone_flags, Process *process) {
@@ -405,8 +445,11 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
     if (copy_sem(clone_flags, process) != 0) {
         goto bad_fork_cleanup_kstack;
     }
-    if (copy_mm(clone_flags, process) != 0) {
+    if (copy_fs(clone_flags, process) != 0) {
         goto bad_fork_cleanup_sem;
+    }
+    if (copy_mm(clone_flags, process) != 0) {
+        goto bad_fork_cleanup_fs;
     }
     copy_thread(process, stack, tf);
 
@@ -429,6 +472,8 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct TrapFrame *tf) {
 
 fork_out:
     return ret;
+bad_fork_cleanup_fs:
+    put_fs(process);
 bad_fork_cleanup_sem:
     put_sem_queue(process);
 bad_fork_cleanup_kstack:
@@ -481,6 +526,8 @@ int __do_exit() {
     }
     // 释放信号量
     put_sem_queue(current);
+    // 释放文件系统
+    put_fs(current);
     current->state = STATE_ZOMBIE;
 
     bool flag;
@@ -765,8 +812,14 @@ int do_execve(const char *name, size_t len, unsigned char *binary, size_t size) 
     }
     // 将当前的信号量释放掉
     put_sem_queue(current);
+    put_fs(current);
 
     int ret = -E_NO_MEM;
+    if ((current->fs_struct = fs_create()) == NULL) {
+        goto execve_exit;
+    }
+    fs_count_inc(current->fs_struct);
+
     // 创建一个新的信号量
     if ((current->sem_queue = sem_queue_create()) == NULL) {
         goto execve_exit;
@@ -1021,6 +1074,11 @@ static int init_main(void *arg) {
     printk("kswapd pid = %d\n", kswapd->pid);
     set_process_name(kswapd, "kswapd");
 
+    int ret;
+    if ((ret = vfs_set_bootfs("disk0:")) != 0) {
+        panic("set boot fs failed: %e.\n", ret);
+    }
+
     size_t nr_free_pages_store = nr_free_pages();
     size_t slab_allocated_store = slab_allocated();
     unsigned int nr_process_store = nr_process;
@@ -1081,6 +1139,11 @@ void process_init(void) {
     idle_process->state = STATE_RUNNABLE;
     idle_process->kstack = (uintptr_t)boot_stack;
     idle_process->need_resched = 1;
+    if ((idle_process->fs_struct = fs_create()) == NULL) {
+        panic("create fs_struct(idle_process) failed.\n");
+    }
+    fs_count_inc(idle_process->fs_struct);
+
     set_process_name(idle_process, "idle");
 
     nr_process++;
@@ -1098,6 +1161,7 @@ void process_init(void) {
 
     assert(idle_process != NULL && idle_process->pid == 0);
     assert(init_process != NULL && init_process->pid == 1);
+    printk("process init ok.\n");
 }
 
 int do_mmap(uintptr_t *addr_store, size_t len, uint32_t mmap_flags) {

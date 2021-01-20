@@ -31,7 +31,7 @@ FsStruct *fs_create(void) {
     if ((fs_struct = kmalloc(sizeof(FsStruct) + FS_STRUCT_BUFSIZE)) != NULL) {
         fs_struct->pwd = NULL;
         fs_struct->filemap = (void *)(fs_struct + 1);
-        atomic_set(&(fs_struct->fs_count), 1);
+        atomic_set(&(fs_struct->fs_count), 0);
         sem_init(&(fs_struct->fs_sem), 1);
         filemap_init(fs_struct->filemap);
     }

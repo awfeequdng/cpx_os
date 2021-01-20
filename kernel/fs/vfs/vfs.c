@@ -47,7 +47,8 @@ int vfs_set_bootfs(char *fsname) {
     Inode *node = NULL;
     if (fsname != NULL) {
         char *s;
-        // todo: 这是什么意思？
+        // fsname的命名方式为 'disk0:'
+        // 先是磁盘名，然后跟一个冒号结束
         if ((s = strchr(fsname, ':')) == NULL || s[1] != 0) {
             return -E_INVAL;
         }

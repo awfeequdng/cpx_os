@@ -13,6 +13,7 @@ static int get_device(char *path, char **sub_path, Inode **node_store) {
     assert(node_store != NULL);
 
     for (i = 0; path[i] != '\0'; i++) {
+        // ':' 前面的内容为磁盘名称
         if (path[i] == ':') { colon = i; break; }
         if (path[i] == '/') { slash = i; break; }
     }
