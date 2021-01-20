@@ -942,3 +942,30 @@ bool copy_to_user(MmStruct *mm, void *dst, const void *src, size_t len) {
     memcpy(dst, src, len);
     return true;
 }
+
+bool copy_string(MmStruct *mm, char *dst, const char *src, size_t max_len) {
+    size_t alen;
+    size_t part = ROUNDDOWN((uintptr_t)src + PAGE_SIZE, PAGE_SIZE) - (uintptr_t)src;
+    while (true) {
+        if (part > max_len) {
+            part = max_len;
+        }
+        if (!user_mem_check(mm, (uintptr_t)src, part, false)) {
+            return false;
+        }
+        if ((alen = strnlen(src, part)) < part) {
+            memcpy(dst, src, alen + 1);
+            return true;
+        }
+        // todo: 为什么相等也不能算成功，最后一个字符不能复制吗？
+        // 如果最后一个是字符，那么就没有空间放‘\0’了
+        if (part == max_len) {
+            return false;
+        }
+        memcpy(dst, src, part);
+        dst += part;
+        src += part;
+        max_len -= part;
+        part = PAGE_SIZE;
+    }
+}

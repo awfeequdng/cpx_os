@@ -59,6 +59,7 @@ KERNEL_SRC_FILES := kernel/init/entry.S \
 		kernel/fs/file.c \
 		kernel/fs/fs.c \
 		kernel/fs/iobuf.c \
+		kernel/fs/sysfile.c \
 		kernel/fs/vfs/inode.c \
 		kernel/fs/vfs/vfs.c \
 		kernel/fs/devs/dev.c \

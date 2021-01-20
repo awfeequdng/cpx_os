@@ -101,3 +101,47 @@ int sys_sem_get_value(sem_t sem_id, int *value_store) {
     return syscall(SYS_sem_get_value, sem_id, value_store);
 }
 
+int sys_open(const char *path, uint32_t open_flags) {
+    return syscall(SYS_open, path, open_flags);
+}
+
+int sys_close(int fd) {
+    return syscall(SYS_close, fd);
+}
+
+int sys_read(int fd, void *base, size_t len) {
+    return syscall(SYS_read, fd, base, len);
+}
+
+int
+sys_write(int fd, void *base, size_t len) {
+    return syscall(SYS_write, fd, base, len);
+}
+
+int sys_seek(int fd, off_t pos, int whence) {
+    return syscall(SYS_seek, fd, pos, whence);
+}
+
+int sys_fstat(int fd, struct stat *stat) {
+    return syscall(SYS_fstat, fd, stat);
+}
+
+int sys_fsync(int fd) {
+    return syscall(SYS_fsync, fd);
+}
+
+int sys_chdir(const char *path) {
+    return syscall(SYS_chdir, path);
+}
+
+int sys_get_cwd(char *buffer, size_t len) {
+    return syscall(SYS_getcwd, buffer, len);
+}
+
+int sys_get_dirent(int fd, struct dirent *dirent) {
+    return syscall(SYS_getdirentry, fd, dirent);
+}
+
+int sys_dup(int fd1, int fd2) {
+    return syscall(SYS_dup, fd1, fd2);
+}

@@ -26,6 +26,24 @@
 #define SYS_sem_wait        42
 #define SYS_sem_get_value   43
 
+#define SYS_open            100
+#define SYS_close           101
+#define SYS_read            102
+#define SYS_write           103
+#define SYS_seek            104
+#define SYS_fstat           110
+#define SYS_fsync           111
+#define SYS_chdir           120
+#define SYS_getcwd          121
+#define SYS_mkdir           122
+#define SYS_link            123
+#define SYS_rename          124
+#define SYS_readlink        125
+#define SYS_symlink         126
+#define SYS_unlink          127
+#define SYS_getdirentry     128
+#define SYS_dup             130
+
 
 // SYS_fork flags
 #define CLONE_VM        0x00000100  // 如果进程之间共享内存，则设置这个标志

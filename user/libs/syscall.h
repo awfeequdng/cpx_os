@@ -21,4 +21,21 @@ sem_t sys_sem_init(int value);
 int sys_sem_post(sem_t sem_id);
 int sys_sem_wait(sem_t sem_id);
 int sys_sem_get_value(sem_t sem_id, int *value_store);
+
+
+struct stat;
+struct dirent;
+
+int sys_open(const char *path, uint32_t open_flags);
+int sys_close(int fd);
+int sys_read(int fd, void *base, size_t len);
+int sys_write(int fd, void *base, size_t len);
+int sys_seek(int fd, off_t pos, int whence);
+int sys_fstat(int fd, struct stat *stat);
+int sys_fsync(int fd);
+int sys_chdir(const char *path);
+int sys_get_cwd(char *buffer, size_t len);
+int sys_get_dirent(int fd, struct dirent *dirent);
+int sys_dup(int fd1, int fd2);
+
 #endif // __USER_LIBS_SYSCALL_H__

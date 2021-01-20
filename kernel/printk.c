@@ -1,8 +1,9 @@
 #include <types.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <unistd.h>
 
-static void putc(int c, int *cnt)
+static void putc(int c, int *cnt, int fd)
 {
 	putchar(c);
 	*cnt++;
@@ -12,7 +13,7 @@ static void putc(int c, int *cnt)
 int vprintk(const char *fmt, va_list ap)
 {
 	int cnt = 0;
-	vprintfmt((void *)putc, &cnt, fmt, ap);
+	vprintfmt((void *)putc, NO_FD, &cnt, fmt, ap);
 	return cnt;
 }
 

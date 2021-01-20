@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <x86.h>
+#include <unistd.h>
 
 static const char * const error_string[MAX_ERROR + 1] = {
     [0]                     NULL,
@@ -32,7 +33,7 @@ static const char * const error_string[MAX_ERROR + 1] = {
     [E_NOTEMPTY]            "directory is not empty",
 };
 
-static void printnum(void (*putc)(int, void*), void *putbuf,
+static void printnum(void (*putc)(int, void*, int), int fd, void *putbuf,
 		unsigned long long num,
 		unsigned base, int width, int padc)
 {
@@ -41,12 +42,12 @@ static void printnum(void (*putc)(int, void*), void *putbuf,
 	
 	if (num >= base) {
 		// 程序报如下错误：'undefined reference to __umoddi3'，说明处理器不支持求余操作
-		printnum(putc, putbuf, result, base, width - 1, padc);
+		printnum(putc, fd, putbuf, result, base, width - 1, padc);
 	} else {
 		while (--width > 0)
-			putc(padc, putbuf);
+			putc(padc, putbuf, fd);
 	}
-	putc("0123456789abcdef"[mod], putbuf);
+	putc("0123456789abcdef"[mod], putbuf, fd);
 }
 
 static unsigned long long getuint(va_list *ap, int lflag)
@@ -70,9 +71,9 @@ static long long getint(va_list *ap, int lflag)
 }
 
 
-void printfmt(void (*putc)(int, void*), void *putbuf, const char *fmt, ...);
+void printfmt(void (*putc)(int, void*, int), int fd, void *putbuf, const char *fmt, ...);
 
-void vprintfmt(void (*putc)(int, void *), void *putbuf, const char *fmt, va_list ap)
+void vprintfmt(void (*putc)(int, void *, int), int fd, void *putbuf, const char *fmt, va_list ap)
 {
 	register const char *p;
 	register int c, err;
@@ -83,7 +84,7 @@ void vprintfmt(void (*putc)(int, void *), void *putbuf, const char *fmt, va_list
 		while ((c = *(unsigned char *) fmt++) != '%') {
 			if (c == '\0')
 				return;
-			putc(c, putbuf);
+			putc(c, putbuf, fd);
 		}
 		// process a %-escape sequence
 		padc = ' ';
@@ -143,7 +144,7 @@ void vprintfmt(void (*putc)(int, void *), void *putbuf, const char *fmt, va_list
 
 		// character
 		case 'c':
-			putc(va_arg(ap, int), putbuf);
+			putc(va_arg(ap, int), putbuf, fd);
 			break;
 		// error message
 		case 'e':
@@ -151,9 +152,9 @@ void vprintfmt(void (*putc)(int, void *), void *putbuf, const char *fmt, va_list
 			if (err < 0)
 				err = -err;
 			if (err >= MAX_ERROR || (p = error_string[err]) == NULL)
-				printfmt(putc, putbuf, "error %d", err);
+				printfmt(putc, fd, putbuf, "error %d", err);
 			else
-				printfmt(putc, putbuf, "%s", p);
+				printfmt(putc, fd, putbuf, "%s", p);
 			break;
 		// string
 		case 's':
@@ -161,20 +162,20 @@ void vprintfmt(void (*putc)(int, void *), void *putbuf, const char *fmt, va_list
 				p = "(null)";
 			if (width > 0 && padc != '-')
 				for (width -= strnlen(p, precision); width > 0; width--)
-					putc(padc, putbuf);
+					putc(padc, putbuf, fd);
 			for (; (c = *p++) != '\0' && (precision < 0 || --precision >= 0); width--)
 				if (altflag && (c < ' ' || c > '~'))
-					putc('?', putbuf);
+					putc('?', putbuf, fd);
 				else
-					putc(c, putbuf);
+					putc(c, putbuf, fd);
 
 			for (; width > 0; width--)
-				putc(' ', putbuf);
+				putc(' ', putbuf, fd);
 			break;
 		case 'd':
 			num = getint(&ap, lflag);
 			if ((long long) num < 0) {
-				putc('-', putbuf);
+				putc('-', putbuf, fd);
 				num = -(long long) num;
 			}
 			base = 10;
@@ -190,8 +191,8 @@ void vprintfmt(void (*putc)(int, void *), void *putbuf, const char *fmt, va_list
 			goto number;
 
 		case 'p':
-			putc('0', putbuf);
-			putc('x', putbuf);
+			putc('0', putbuf, fd);
+			putc('x', putbuf, fd);
 			num = (unsigned long long)(uintptr_t) va_arg(ap, void *);
 			base = 16;
 			goto number;
@@ -199,17 +200,17 @@ void vprintfmt(void (*putc)(int, void *), void *putbuf, const char *fmt, va_list
 			num = getuint(&ap, lflag);
 			base = 16;
 		number:
-			printnum(putc, putbuf, num, base, width, padc);
+			printnum(putc, fd, putbuf, num, base, width, padc);
 			break;
 
 		// escaped '%' character
 		case '%':
-			putc(c, putbuf);
+			putc(c, putbuf, fd);
 			break;
 
 		// unrecognized escape sequence - just print it literally
 		default:
-			putc('%', putbuf);
+			putc('%', putbuf, fd);
 			for (fmt--; fmt[-1] != '%'; fmt--);
 
 
@@ -217,11 +218,11 @@ void vprintfmt(void (*putc)(int, void *), void *putbuf, const char *fmt, va_list
 	}
 }
 
-void printfmt(void (*putc)(int, void*), void *putbuf, const char *fmt, ...)
+void printfmt(void (*putc)(int, void*, int), int fd, void *putbuf, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	vprintfmt(putc, putbuf, fmt, ap);
+	vprintfmt(putc, fd, putbuf, fmt, ap);
 	va_end(ap);
 }
 
@@ -247,7 +248,7 @@ int vsnprintf(char *buf, int n, const char *fmt, va_list ap)
 
 	if (buf == NULL || n < 1)
 		return -E_INVAL;
-	vprintfmt((void*)sprintputc, &b, fmt, ap);
+	vprintfmt((void*)sprintputc, NO_FD, &b, fmt, ap);
 	*b.buf = '\0';
 
 	return b.cnt;	

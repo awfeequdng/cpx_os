@@ -244,7 +244,7 @@ int file_write(int fd, void *base, size_t len, size_t *copied_store) {
     return ret;
 }
 
-int file_stat(int fd, Stat *stat) {
+int file_fstat(int fd, Stat *stat) {
     int ret;
     File *file = NULL;
     if ((ret = fd2file(fd, &file)) != 0) {

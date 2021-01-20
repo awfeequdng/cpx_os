@@ -109,6 +109,7 @@ bool try_lock_mm(MmStruct *mm);
 
 bool copy_from_user(MmStruct *mm, void *dst, const void *src, size_t len, bool writable);
 bool copy_to_user(MmStruct *mm, void *dst, const void *src, size_t len);
+bool copy_string(MmStruct *mm, char *dst, const char *src, size_t max_len);
 
 void print_vma(void);
 

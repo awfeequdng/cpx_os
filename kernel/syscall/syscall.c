@@ -6,6 +6,7 @@
 #include <clock.h>
 #include <trap.h>
 #include <error.h>
+#include <sysfile.h>
 
 static uint32_t sys_exit(uint32_t arg[]) {
     int error_code = (int)arg[0];
@@ -127,6 +128,72 @@ static uint32_t sys_sem_get_value(uint32_t arg[]) {
     return ipc_sem_get_value(sem_id, value_store);
 }
 
+static uint32_t sys_open(uint32_t arg[]) {
+    const char *path = (const char *)arg[0];
+    uint32_t open_flags = (uint32_t)arg[1];
+    return sysfile_open(path, open_flags);
+}
+
+static uint32_t sys_close(uint32_t arg[]) {
+    int fd = (int)arg[0];
+    return sysfile_close(fd);
+}
+
+static uint32_t sys_read(uint32_t arg[]) {
+    int fd = (int)arg[0];
+    void *base = (void *)arg[1];
+    size_t len = (size_t)arg[2];
+    return sysfile_read(fd, base, len);
+}
+
+static uint32_t sys_write(uint32_t arg[]) {
+    int fd = (int)arg[0];
+    void *base = (void *)arg[1];
+    size_t len = (size_t)arg[2];
+    return sysfile_write(fd, base, len);
+}
+
+static uint32_t sys_seek(uint32_t arg[]) {
+    int fd = (int)arg[0];
+    off_t pos = (off_t)arg[1];
+    int whence = (int)arg[2];
+    return sysfile_seek(fd, pos, whence);
+}
+
+static uint32_t sys_fstat(uint32_t arg[]) {
+    int fd = (int)arg[0];
+    struct stat *stat = (struct stat *)arg[1];
+    return sysfile_fstat(fd, stat);
+}
+
+static uint32_t sys_fsync(uint32_t arg[]) {
+    int fd = (int)arg[0];
+    return sysfile_fsync(fd);
+}
+
+static uint32_t sys_chdir(uint32_t arg[]) {
+    const char *path = (const char *)arg[0];
+    return sysfile_chdir(path);
+}
+
+static uint32_t sys_get_cwd(uint32_t arg[]) {
+    char *buf = (char *)arg[0];
+    size_t len = (size_t)arg[1];
+    return sysfile_get_cwd(buf, len);
+}
+
+static uint32_t sys_get_dirent(uint32_t arg[]) {
+    int fd = (int)arg[0];
+    struct dirent *direntp = (struct dirent *)arg[1];
+    return sysfile_get_dirent(fd, direntp);
+}
+
+static uint32_t sys_dup(uint32_t arg[]) {
+    int fd1 = (int)arg[0];
+    int fd2 = (int)arg[1];
+    return sysfile_dup(fd1, fd2);
+}
+
 static uint32_t (*syscalls[])(uint32_t arg[]) = {
     [SYS_exit] = sys_exit,
     [SYS_fork] = sys_fork,
@@ -149,6 +216,17 @@ static uint32_t (*syscalls[])(uint32_t arg[]) = {
     [SYS_sem_post] = sys_sem_post,
     [SYS_sem_wait] = sys_sem_wait,
     [SYS_sem_get_value] = sys_sem_get_value,
+    [SYS_open] = sys_open,
+    [SYS_close] = sys_close,
+    [SYS_read] = sys_read,
+    [SYS_write] = sys_write,
+    [SYS_seek] = sys_seek,
+    [SYS_fstat] =       sys_fstat,
+    [SYS_fsync] = sys_fsync,
+    [SYS_chdir] = sys_chdir,
+    [SYS_getcwd] = sys_get_cwd,
+    [SYS_getdirentry] = sys_get_dirent,
+    [SYS_dup] = sys_dup,
 };
 
 #define NUM_SYSCALLS        ((sizeof(syscalls)) / (sizeof(syscalls[0])))
