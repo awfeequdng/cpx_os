@@ -145,3 +145,20 @@ int sys_get_dirent(int fd, struct dirent *dirent) {
 int sys_dup(int fd1, int fd2) {
     return syscall(SYS_dup, fd1, fd2);
 }
+
+
+int sys_mkdir(const char *path) {
+    return syscall(SYS_mkdir, path);
+}
+
+int sys_link(const char *path1, const char *path2) {
+    return syscall(SYS_link, path1, path2);
+}
+
+int sys_rename(const char *path1, const char *path2) {
+    return syscall(SYS_rename, path1, path2);
+}
+
+int sys_unlink(const char *path) {
+    return syscall(SYS_unlink, path);
+}

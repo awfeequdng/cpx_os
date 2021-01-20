@@ -21,7 +21,9 @@ USER_SRC_FILES := user/libs/init_code.S \
 		user/libs/file.c
 
 USER_BINS_SRC_FILES := \
-		user/sfs_file_test1.c \
+		user/sfs_file_test3.c \
+#		user/sfs_file_test2.c \
+#		user/sfs_file_test1.c \
 #		user/hello2.c \
 #		user/sem_test.c \
 #		user/matrix.c \
@@ -72,7 +74,9 @@ $(USER_OBJ_BINS_FILES): $(USER_BINS_SRC_FILES)
 $(USER_BINS): $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(USER_OBJ_BINS_FILES)
 	@echo + ld $@
 	@echo +++++++++ user bins: $(USER_BINS)
-	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)sfs_file_test1 $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/sfs_file_test1.o
+	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)sfs_file_test3 $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/sfs_file_test3.o
+#	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)sfs_file_test2 $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/sfs_file_test2.o
+#	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)sfs_file_test1 $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/sfs_file_test1.o
 #	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)hello2 $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/hello2.o
 #	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)hello $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/hello.o
 #	$(V)$(LD) -o $(OBJ_DIR)/user/$(USER_PREFIX)yield $(USER_LDFLAGS) $(USER_OBJ_FILES) $(USER_LIB_OBJ_FILES) $(OBJ_DIR)/user/yield.o

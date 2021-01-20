@@ -17,5 +17,8 @@ int sysfile_chdir(const char *path);
 int sysfile_get_cwd(char *buf, size_t len);
 int sysfile_get_dirent(int fd, struct dirent *direntp);
 int sysfile_dup(int fd1, int fd2);
-
+int sysfile_mkdir(const char *path);
+int sysfile_link(const char *path1, const char *path2);
+int sysfile_rename(const char *path1, const char *path2);
+int sysfile_unlink(const char *path);
 #endif //__KERNEL_FS_SFSFILE_H__

@@ -194,6 +194,29 @@ static uint32_t sys_dup(uint32_t arg[]) {
     return sysfile_dup(fd1, fd2);
 }
 
+
+static uint32_t sys_mkdir(uint32_t arg[]) {
+    const char *path = (const char *)arg[0];
+    return sysfile_mkdir(path);
+}
+
+static uint32_t sys_link(uint32_t arg[]) {
+    const char *path1 = (const char *)arg[0];
+    const char *path2 = (const char *)arg[1];
+    return sysfile_link(path1, path2);
+}
+
+static uint32_t sys_rename(uint32_t arg[]) {
+    const char *path1 = (const char *)arg[0];
+    const char *path2 = (const char *)arg[1];
+    return sysfile_rename(path1, path2);
+}
+
+static uint32_t sys_unlink(uint32_t arg[]) {
+    const char *name = (const char *)arg[0];
+    return sysfile_unlink(name);
+}
+
 static uint32_t (*syscalls[])(uint32_t arg[]) = {
     [SYS_exit] = sys_exit,
     [SYS_fork] = sys_fork,
@@ -227,6 +250,10 @@ static uint32_t (*syscalls[])(uint32_t arg[]) = {
     [SYS_getcwd] = sys_get_cwd,
     [SYS_getdirentry] = sys_get_dirent,
     [SYS_dup] = sys_dup,
+    [SYS_mkdir] = sys_mkdir,
+    [SYS_link] = sys_link,
+    [SYS_rename] = sys_rename,
+    [SYS_unlink] = sys_unlink,
 };
 
 #define NUM_SYSCALLS        ((sizeof(syscalls)) / (sizeof(syscalls[0])))
